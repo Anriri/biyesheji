@@ -1,0 +1,34 @@
+:root {
+  color-scheme: light;
+  background: #f6f5f3;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  background: #f6f5f3;
+}
+
+body { overflow: hidden; }
+
+main {
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.scene {
+  display: block;
+  width: min(96vw, 100vh, 760px);
+  width: min(96vw, 100svh, 760px);
+  height: auto;
+  overflow: visible;
+  user-select: none;
+  -webkit-user-select: none;
+}

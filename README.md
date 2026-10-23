@@ -2,6 +2,14 @@
 
 一个可在浏览器中运行的毕业设计交互原型。原创小生物「弥弥」由连续 SVG 曲线绘制；摄像头画面通过 **MediaPipe Hands 的真实手部识别**生成 21 个手部关键点，驱动耳朵和身体的软形变。
 
+## 当前独立实验：纯白团子生命感动画
+
+**[下载初生动画 ZIP：解压后双击打开，无需安装](https://raw.githubusercontent.com/Anriri/biyesheji/main/downloads/unnamed-creature-life.zip)**
+
+这个最小原型只显示纯白软团子和一双深色眼睛，没有嘴巴、耳朵、四肢、花纹、文字或按钮。自动轻柔浮动、摇晃、压扁回弹、轮廓波动、眨眼和改变视线，不需要摄像头或用户点击。
+
+源码位于 [life-prototype](life-prototype/README.md)，单文件入口为 [standalone.html](life-prototype/standalone.html)。下载包里双击 **`打开动画.html`**。下面保留旧版塑形实验的说明。
+
 ## v3 · 有边界的自由塑形
 
 保留现有页面、珠光弥弥和真实摄像头识别，优化实际几何变形，使角色适合向可爱 IP 挂件造型方向探索。

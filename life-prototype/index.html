@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f5f3" />
+    <meta name="description" content="未名生物收容所：只有一双眼睛的纯白软团子，自动、轻柔地呼吸和摇晃。" />
+    <title>未名生物收容所 · 初生</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./style.css" />
+    <script src="./creature.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <svg class="scene" viewBox="0 80 640 480" role="img" aria-label="一个只有深色眼睛的纯白软团子，轻轻浮动、摇晃和眨眼">
+        <defs>
+          <radialGradient id="floor-softness">
+            <stop offset="0" stop-color="#aaa6a0" stop-opacity=".21" />
+            <stop offset=".5" stop-color="#b5b0a9" stop-opacity=".10" />
+            <stop offset="1" stop-color="#b5b0a9" stop-opacity="0" />
+          </radialGradient>
+          <filter id="soft-edge" x="-25%" y="-25%" width="150%" height="160%" color-interpolation-filters="sRGB">
+            <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#918a82" flood-opacity=".09" />
+          </filter>
+        </defs>
+        <ellipse id="floor" cx="320" cy="437" rx="111" ry="13" fill="url(#floor-softness)" />
+        <g id="creature" transform="translate(320 428)">
+          <path id="body" fill="#ffffff" filter="url(#soft-edge)" />
+          <g id="eyes" fill="#292940">
+            <ellipse id="eye-left" cx="-29" cy="-120" rx="10.2" ry="15.5" />
+            <ellipse id="eye-right" cx="29" cy="-120" rx="10.2" ry="15.5" />
+          </g>
+        </g>
+      </svg>
+    </main>
+  </body>
+</html>
