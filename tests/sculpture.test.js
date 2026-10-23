@@ -1,62 +1,104 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Sculpture, INITIAL, closedCurve, earPath } from '../src/sculpture.js';
+import { Sculpture, INITIAL, closedCurve, skinPoint, distance } from '../src/sculpture.js';
 import { GestureFilter, measurePinch, pinchPoint } from '../src/gesture.js';
 
-test('耳朵抓取使用移动差值，不跳到手指位置；松手保留形状', () => {
-  const sculpture = new Sculpture();
-  const origin = { x: 410, y: 140 };
-  assert.deepEqual(sculpture.begin(origin), { kind: 'ears', index: 0 });
-  sculpture.move(origin);
-  assert.deepEqual(sculpture.target.ears, INITIAL.ears);
-  sculpture.move({ x: 350, y: 70 });
-  assert.deepEqual(sculpture.target.ears[0], { x: 333, y: 48 });
-  assert.deepEqual(sculpture.target.ears[1], INITIAL.ears[1]);
-  assert.equal(sculpture.release(), true);
-  const saved = structuredClone(sculpture.target);
-  for (let i = 0; i < 240; i++) sculpture.tick(1 / 60);
-  assert.deepEqual(sculpture.target, saved);
-  assert.ok(Math.abs(sculpture.display.ears[0].x - saved.ears[0].x) < 0.01);
-  assert.equal(sculpture.changes, 1);
-});
-
-test('身体宽度与高度可连续改变，邻点柔和跟随，顶部保持连接', () => {
-  const sculpture = new Sculpture();
-  assert.deepEqual(sculpture.begin({ x: 585, y: 480 }), { kind: 'body', index: 2 });
-  sculpture.move({ x: 705, y: 480 });
-  assert.equal(sculpture.target.body[2].x, 705);
-  assert.ok(sculpture.target.body[3].x > INITIAL.body[3].x);
-  assert.deepEqual(sculpture.target.body[0], INITIAL.body[0]);
+const settle = sculpture => { for (let i = 0; i < 240; i++) sculpture.tick(1 / 60); };
+const pull = (sculpture, near, destination) => {
+  const hit = sculpture.hitTest(near);
+  assert.ok(hit, 'material should be reachable');
+  const origin = hit.point;
+  const grab = sculpture.begin(origin);
+  assert.ok(grab);
+  sculpture.move(destination);
+  const tip = { ...sculpture.target.body[sculpture.grab.index] };
   sculpture.release();
-  sculpture.begin({ x: 480, y: 579 });
-  sculpture.move({ x: 480, y: 629 });
-  assert.equal(sculpture.target.body[4].y, 629);
-  sculpture.release();
-  assert.equal(sculpture.changes, 2);
-});
+  settle(sculpture);
+  return tip;
+};
 
-test('画布外抓取无效，极端拉伸被限制，重置恢复初始形态', () => {
+test('整个轮廓与内部均可抓取，首次捏合不跳位', () => {
   const sculpture = new Sculpture();
+  assert.ok(sculpture.hitTest({ x: 480, y: 330 }));
+  assert.ok(sculpture.hitTest({ x: 480, y: 220 }));
+  assert.ok(sculpture.hitTest({ x: 325, y: 480 }));
   assert.equal(sculpture.begin({ x: 10, y: 10 }), null);
+  const hand = { x: 570, y: 500 };
+  sculpture.begin(hand);
+  const before = structuredClone(sculpture.target);
+  sculpture.move(hand);
+  assert.deepEqual(sculpture.target, before);
   assert.equal(sculpture.release(), false);
-  sculpture.begin(INITIAL.ears[1]);
-  sculpture.move({ x: 10000, y: -10000 });
-  assert.equal(sculpture.target.ears[1].x, 870);
-  assert.equal(sculpture.target.ears[1].y, 48);
-  sculpture.release();
-  assert.notDeepEqual(sculpture.target, INITIAL);
+});
+
+test('可从身体反复拉出六根触须，无固定身体控制点；旧触须保留', () => {
+  const sculpture = new Sculpture();
+  const initialCount = sculpture.target.body.length;
+  const pulls = [
+    [{ x: 404, y: 468 }, { x: 235, y: 433 }],
+    [{ x: 398, y: 520 }, { x: 200, y: 570 }],
+    [{ x: 432, y: 577 }, { x: 370, y: 645 }],
+    [{ x: 536, y: 578 }, { x: 625, y: 641 }],
+    [{ x: 565, y: 512 }, { x: 790, y: 556 }],
+    [{ x: 549, y: 459 }, { x: 769, y: 424 }],
+  ];
+  const tips = pulls.map(([from, to]) => pull(sculpture, from, to));
+  assert.equal(sculpture.changes, 6);
+  assert.ok(sculpture.target.body.length > initialCount);
+  for (const tip of tips) assert.ok(Math.min(...sculpture.target.body.map(p => distance(p, tip))) < 18, 'older tentacle tips must remain');
+  assert.ok(Math.min(...sculpture.target.body.map(p => p.x)) < 220);
+  assert.ok(Math.max(...sculpture.target.body.map(p => p.x)) > 770);
+  assert.doesNotMatch(closedCurve(sculpture.target.body), /NaN|Infinity/);
+});
+
+test('已有触须可以再抓取、侧向分叉，松开不恢复原形', () => {
+  const sculpture = new Sculpture();
+  const first = pull(sculpture, { x: 564, y: 510 }, { x: 820, y: 510 });
+  sculpture.radius = 19;
+  const branch = pull(sculpture, { x: 710, y: 503 }, { x: 710, y: 354 });
+  assert.ok(branch.y < 365);
+  assert.ok(Math.min(...sculpture.target.body.map(p => distance(p, first))) < 15);
+  const retained = structuredClone(sculpture.target);
+  settle(sculpture);
+  assert.deepEqual(sculpture.target, retained);
+  assert.ok(sculpture.display.body.every((p, i) => distance(p, retained.body[i]) < .05));
+});
+
+test('笔触粗细改变受影响的材料范围，向上、向内、向侧面均可移动', () => {
+  const thin = new Sculpture(), broad = new Sculpture();
+  thin.radius = 18; broad.radius = 82;
+  const changed = sculpture => {
+    sculpture.begin({ x: 560, y: 510 });
+    const before = sculpture.grab.snapshot.body;
+    sculpture.move({ x: 715, y: 380 });
+    return sculpture.target.body.filter((p, i) => distance(p, before[i]) > 10).length;
+  };
+  assert.ok(changed(broad) > changed(thin) * 2);
+});
+
+test('撤销恢复完整轮廓，重置清空历史，极端拉伸仍在画布内', () => {
+  const sculpture = new Sculpture();
+  const before = structuredClone(sculpture.target);
+  pull(sculpture, { x: 565, y: 510 }, { x: 10000, y: -10000 });
+  assert.ok(sculpture.target.body.every(p => p.x >= 25 && p.x <= 935 && p.y >= 40 && p.y <= 656));
+  assert.equal(sculpture.undo(), true);
+  assert.deepEqual(sculpture.target, before);
+  assert.equal(sculpture.undo(), false);
+  pull(sculpture, { x: 565, y: 510 }, { x: 750, y: 510 });
   sculpture.reset();
   assert.deepEqual(sculpture.target, INITIAL);
+  assert.equal(sculpture.history.length, 0);
   assert.equal(sculpture.changes, 0);
 });
 
-test('形变轮廓为有限数值的闭合贝塞尔路径', () => {
-  for (const path of [closedCurve(INITIAL.body), earPath(0, INITIAL.ears[0]), earPath(1, { x: 800, y: 48 }, true)]) {
-    assert.match(path, /^M /);
-    assert.match(path.trim(), /Z$/);
-    assert.doesNotMatch(path, /NaN|Infinity/);
-    assert.match(path, /C /);
-  }
+test('变形后表情材质绑定与闭合曲线始终是有限数值', () => {
+  const sculpture = new Sculpture();
+  pull(sculpture, { x: 550, y: 240 }, { x: 720, y: 100 });
+  const face = skinPoint({ x: 480, y: 340 }, sculpture.target.body);
+  assert.ok(Number.isFinite(face.x) && Number.isFinite(face.y));
+  const path = closedCurve(sculpture.target.body);
+  assert.match(path, /^M /); assert.match(path, / Z$/);
+  assert.doesNotMatch(path, /NaN|Infinity/);
 });
 
 const hand = (gap = 0.02) => {

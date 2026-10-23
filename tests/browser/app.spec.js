@@ -6,6 +6,10 @@ test('桌面页面、指南、档案和重置可用；鼠标不会改变生物�
   await page.goto('/');
   await expect(page.getByRole('heading', { name: '捏一点，不一样。' })).toBeVisible();
   await expect(page.locator('#body')).toHaveAttribute('d', /^M /);
+  await expect(page.getByRole('button', { name: '撤销一步' })).toBeDisabled();
+  await page.locator('#brush-size').fill('82');
+  await expect(page.locator('#brush-label')).toHaveText('宽幅塑形');
+  await page.locator('#brush-size').fill('32');
   const before = await page.locator('#body').getAttribute('d');
   await page.mouse.move(500, 450); await page.mouse.down();
   await page.mouse.move(650, 500); await page.mouse.up();
@@ -16,6 +20,7 @@ test('桌面页面、指南、档案和重置可用；鼠标不会改变生物�
   await expect(page.locator('#guide-dialog')).not.toBeVisible();
   await page.getByRole('button', { name: '物种档案' }).click();
   await expect(page.locator('#archive-count')).toHaveText('0 次');
+  await expect(page.locator('.concept-image')).toBeVisible();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '重置形态' }).click();
   await expect(page.locator('#toast')).toContainText('回到最初');

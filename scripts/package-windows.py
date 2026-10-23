@@ -1,6 +1,7 @@
 """Run after npm run build; produces the self-contained Windows download."""
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
+from shutil import copyfile
 
 root = Path(__file__).resolve().parent.parent
 dist = root / 'dist'
@@ -16,4 +17,5 @@ with ZipFile(output, 'w', ZIP_DEFLATED, compresslevel=6) as archive:
             archive.write(path, Path('unnamed-creature/app') / path.relative_to(dist))
 with ZipFile(output) as archive:
     assert archive.testzip() is None
+copyfile(output, output.with_name('unnamed-creature-windows-v2.zip'))
 print(f'Windows package: {output} ({output.stat().st_size / 1024 / 1024:.1f} MB)')

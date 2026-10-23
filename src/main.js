@@ -1,5 +1,5 @@
 import './style.css';
-import { Sculpture, WIDTH, HEIGHT, closedCurve, earPath, clamp } from './sculpture.js';
+import { Sculpture, WIDTH, HEIGHT, closedCurve, skinPoint, clamp } from './sculpture.js';
 import { GestureFilter } from './gesture.js';
 import { CameraTracker, CONNECTIONS } from './tracking.js';
 
@@ -19,7 +19,7 @@ const icon = (name, extra = '') => `<svg ${extra} viewBox="0 0 24 24" fill="none
 document.querySelector('#app').innerHTML = `
   <header class="site-header">
     <a class="brand" href="./" aria-label="未名生物收容所首页">
-      <svg class="brand-symbol" viewBox="0 0 48 48" aria-hidden="true"><path d="M12 26C1-1 18-3 21 22M27 22C33-5 48 3 36 28" fill="#a9bb89" stroke="#343b2d" stroke-width="1.5"/><path d="M5 30c0-16 37-16 37 0 0 19-37 19-37 0Z" fill="#d8e3bd" stroke="#343b2d" stroke-width="1.5"/><circle cx="18" cy="30" r="1.8"/><circle cx="30" cy="30" r="1.8"/><path d="M22 35q2 2 4 0" fill="none" stroke="#343b2d" stroke-linecap="round"/></svg>
+      <svg class="brand-symbol" viewBox="0 0 48 48" aria-hidden="true"><path d="M10 17C4 21 3 39 8 40L14 28M36 17C43 22 45 38 40 40L34 28" fill="#c1a9d4" stroke="#8d719c" stroke-width="1"/><path d="M9 23C8 4 39 4 39 23C39 38 9 39 9 23Z" fill="#eadfea" stroke="#9e82ae"/><ellipse cx="17" cy="24" rx="3.5" ry="4" fill="#59405f"/><ellipse cx="31" cy="24" rx="3.5" ry="4" fill="#59405f"/><circle cx="16" cy="22" r="1" fill="#fff5e9"/><circle cx="30" cy="22" r="1" fill="#fff5e9"/><path d="m24 12 1.5 4 3 1-3 1-1.5 4-1-4-3-1 3-1Z" fill="#e4b77f"/><path d="M22 31q2 2 4 0" fill="none" stroke="#ab859b" stroke-linecap="round"/></svg>
       <span><strong>未名生物收容所</strong><small>THE UNNAMED CREATURE SHELTER</small></span>
     </a>
     <nav aria-label="主导航"><span class="nav-active">塑形实验室 <i></i></span><button id="archive-button">物种档案 ${icon('arrow')}</button></nav>
@@ -28,7 +28,7 @@ document.querySelector('#app').innerHTML = `
 
   <main>
     <section class="intro">
-      <div><div class="eyebrow"><span></span> 隔空捏塑计划 <b>EXPERIMENT 001</b></div><h1>捏一点，<em>不一样。</em><svg viewBox="0 0 56 56" aria-hidden="true"><path d="M28 4v48M4 28h48M11 11l34 34M11 45l34-34"/></svg></h1><p>伸出手，让想象有形状。这里的每一只小生物，都由你亲手定义。</p></div>
+      <div><div class="eyebrow"><span></span> 隔空捏塑计划 <b>EXPERIMENT 002</b></div><h1>捏一点，<em>不一样。</em><svg viewBox="0 0 56 56" aria-hidden="true"><path d="M28 4v48M4 28h48M11 11l34 34M11 45l34-34"/></svg></h1><p>伸出手，让想象有形状。这里的每一只小生物，都由你亲手定义。</p></div>
       <div class="intro-note"><span class="note-star">✳</span><p>不用触碰，也能靠近。<br/><strong>一双手，一点奇思妙想。</strong></p><span class="note-arrow">↙</span></div>
     </section>
 
@@ -37,47 +37,49 @@ document.querySelector('#app').innerHTML = `
         <div class="lab-toolbar"><div class="lab-title"><span class="tiny-dot"></span> 观察室 <span class="mono">LIVE CANVAS</span></div><div class="toolbar-right"><span id="stage-state" class="state-pill">等待手势</span><button id="help-button" class="icon-button" aria-label="查看手势指南" title="手势指南">${icon('info')}</button></div></div>
         <div class="stage" id="stage">
           <span class="stage-corner corner-tl"></span><span class="stage-corner corner-tr"></span><span class="stage-corner corner-bl"></span><span class="stage-corner corner-br"></span>
-          <div class="specimen-label"><span>NO. 001</span><h2>糯糯 <small>NUO NUO</small></h2><p>未分类 · 软乎乎科</p></div>
-          <div class="stage-tip" id="stage-tip">${icon('hand')} 打开摄像头，和糯糯打个招呼</div>
-          <svg id="creature-stage" viewBox="0 0 ${WIDTH} ${HEIGHT}" role="img" aria-label="可通过真实手势拉伸耳朵和身体的绿色长耳生物糯糯">
+          <div class="specimen-label"><span>NO. 002</span><h2>弥弥 <small>MIMI</small></h2><p>未分类 · 月光软体科</p></div>
+          <div class="stage-tip" id="stage-tip">${icon('hand')} 打开摄像头，和弥弥打个招呼</div>
+          <svg id="creature-stage" viewBox="0 0 ${WIDTH} ${HEIGHT}" role="img" aria-label="可通过真实手势拉伸耳朵和身体的珠光淡紫软体生物弥弥，可从整个轮廓捏出多根触须">
             <defs>
-              <linearGradient id="ear-gradient" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d4e5b1"/><stop offset=".5" stop-color="#b7cf94"/><stop offset="1" stop-color="#87a76e"/></linearGradient>
-              <linearGradient id="body-gradient" x1=".1" y1="0" x2=".85" y2="1"><stop stop-color="#dbe8bc"/><stop offset=".53" stop-color="#bbd39b"/><stop offset="1" stop-color="#99b780"/></linearGradient>
-              <radialGradient id="head-gradient" cx=".37" cy=".24" r=".84"><stop stop-color="#e1ebc7"/><stop offset=".52" stop-color="#c8dba8"/><stop offset="1" stop-color="#9eba82"/></radialGradient>
-              <radialGradient id="belly-gradient"><stop stop-color="#ebefd5" stop-opacity=".95"/><stop offset="1" stop-color="#e4edca" stop-opacity=".25"/></radialGradient>
-              <radialGradient id="cheek-gradient"><stop stop-color="#eca58e" stop-opacity=".8"/><stop offset="1" stop-color="#eca58e" stop-opacity="0"/></radialGradient>
-              <radialGradient id="shadow-gradient"><stop stop-color="#667647" stop-opacity=".2"/><stop offset="1" stop-color="#667647" stop-opacity="0"/></radialGradient>
-              <filter id="clay-shadow" x="-40%" y="-30%" width="180%" height="180%"><feDropShadow dx="1" dy="7" stdDeviation="7" flood-color="#54683a" flood-opacity=".12"/></filter>
+              <radialGradient id="pearl-skin" cx=".36" cy=".22" r=".88"><stop stop-color="#fff5ef"/><stop offset=".25" stop-color="#e9dfea"/><stop offset=".60" stop-color="#c8b5d9"/><stop offset=".84" stop-color="#ac95c1"/><stop offset="1" stop-color="#8b749f"/></radialGradient>
+              <radialGradient id="eye-gem" cx=".37" cy=".26" r=".8"><stop stop-color="#60506d"/><stop offset=".45" stop-color="#39293f"/><stop offset=".78" stop-color="#543650"/><stop offset="1" stop-color="#bb8b9b"/></radialGradient>
+              <linearGradient id="auricle" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#f8e4e3"/><stop offset=".6" stop-color="#e8b8bf"/><stop offset="1" stop-color="#f7d0ba"/></linearGradient>
+              <radialGradient id="cheek-gradient"><stop stop-color="#eeb4b2" stop-opacity=".8"/><stop offset="1" stop-color="#eeb4b2" stop-opacity="0"/></radialGradient>
+              <radialGradient id="shine-gradient"><stop stop-color="#fff9f2" stop-opacity=".7"/><stop offset="1" stop-color="#fff9f2" stop-opacity="0"/></radialGradient>
+              <radialGradient id="shadow-gradient"><stop stop-color="#887292" stop-opacity=".2"/><stop offset="1" stop-color="#887292" stop-opacity="0"/></radialGradient>
+              <filter id="clay-shadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="9" stdDeviation="9" flood-color="#715a80" flood-opacity=".17"/></filter>
+              <filter id="pearl-rim" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur in="SourceAlpha" stdDeviation="5" result="blur"/><feOffset in="blur" dx="4" dy="7" result="offset"/><feComposite in="SourceAlpha" in2="offset" operator="out" result="rim"/><feFlood flood-color="#fff8ef" flood-opacity=".85"/><feComposite in2="rim" operator="in"/><feComposite in2="SourceGraphic" operator="over"/></filter>
+              <clipPath id="skin-clip"><use href="#body"/></clipPath>
             </defs>
-            <ellipse id="ground-shadow" cx="480" cy="607" rx="159" ry="27" fill="url(#shadow-gradient)"/>
+            <ellipse id="ground-shadow" cx="480" cy="609" rx="150" ry="25" fill="url(#shadow-gradient)"/>
             <g id="creature" filter="url(#clay-shadow)">
-              <path id="ear-0" fill="url(#ear-gradient)" stroke="#95af7b" stroke-width="1"/>
-              <path id="ear-1" fill="url(#ear-gradient)" stroke="#95af7b" stroke-width="1"/>
-              <path id="ear-inner-0" fill="#edf0ce" opacity=".65"/>
-              <path id="ear-inner-1" fill="#edf0ce" opacity=".65"/>
-              <ellipse id="foot-left" cx="423" cy="570" rx="42" ry="21" fill="#aac48f"/>
-              <ellipse id="foot-right" cx="539" cy="570" rx="42" ry="21" fill="#a4c088"/>
-              <path id="body" fill="url(#body-gradient)" stroke="#a1ba86" stroke-width="1"/>
-              <ellipse id="belly" cx="480" cy="480" rx="67" ry="72" fill="url(#belly-gradient)"/>
-              <path d="M351 312C347 256 396 224 466 230C534 214 600 252 609 310C627 373 574 406 484 408C399 412 342 381 351 312Z" fill="url(#head-gradient)" stroke="#a9bf8d" stroke-width="1"/>
-              <path d="M384 278Q405 251 442 251" stroke="#f4f7e5" stroke-width="8" fill="none" opacity=".43" stroke-linecap="round"/>
-              <g id="face">
-                <ellipse cx="402" cy="347" rx="28" ry="19" fill="url(#cheek-gradient)"/>
-                <ellipse cx="558" cy="347" rx="28" ry="19" fill="url(#cheek-gradient)"/>
-                <g id="eyes"><ellipse cx="434" cy="323" rx="7" ry="10" fill="#3c4730"/><ellipse cx="527" cy="323" rx="7" ry="10" fill="#3c4730"/><circle cx="436" cy="320" r="2" fill="#fff"/><circle cx="529" cy="320" r="2" fill="#fff"/></g>
-                <path id="mouth" d="M469 344Q480 356 491 344" stroke="#566145" stroke-width="3.5" stroke-linecap="round" fill="none"/>
-                <path d="M477 333Q480 330 483 333" stroke="#6d7858" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+              <path id="body" fill="url(#pearl-skin)" stroke="#a58eb5" stroke-width="1" filter="url(#pearl-rim)"/>
+              <g clip-path="url(#skin-clip)">
+                <path id="ear-inner-0" fill="url(#auricle)" opacity=".88"/>
+                <path id="ear-inner-1" fill="url(#auricle)" opacity=".88"/>
+                <ellipse id="head-glow" cx="442" cy="285" rx="110" ry="67" fill="url(#shine-gradient)"/>
+                <ellipse id="belly" cx="470" cy="482" rx="62" ry="82" fill="url(#shine-gradient)" opacity=".6"/>
+                <path id="head-shine" stroke="#fff9f2" stroke-width="6" opacity=".6" stroke-linecap="round" fill="none"/>
               </g>
-              <path id="belly-mark" d="M476 478q4 5 8 0" fill="none" stroke="#8ca575" stroke-width="2.5" stroke-linecap="round" opacity=".6"/>
+              <g id="face">
+                <path d="M480 256Q482 274 492 279Q482 282 480 299Q477 282 467 279Q478 276 480 256Z" fill="#efbd82"/>
+                <g fill="#e7b487" opacity=".8"><circle cx="449" cy="279" r="2"/><circle cx="508" cy="278" r="2.3"/><circle cx="434" cy="290" r="1.4"/><circle cx="521" cy="291" r="1.4"/><circle cx="456" cy="298" r="1.5"/><circle cx="504" cy="301" r="1.7"/></g>
+                <ellipse cx="401" cy="366" rx="32" ry="21" fill="url(#cheek-gradient)"/><ellipse cx="560" cy="366" rx="32" ry="21" fill="url(#cheek-gradient)"/>
+                <g id="eyes"><ellipse cx="425" cy="335" rx="26" ry="30" fill="#e5c8d5" stroke="#b49aa9" stroke-width="1"/><ellipse cx="535" cy="333" rx="26" ry="30" fill="#e5c8d5" stroke="#b49aa9" stroke-width="1"/><ellipse cx="425" cy="334" rx="23" ry="27" fill="url(#eye-gem)"/><ellipse cx="535" cy="332" rx="23" ry="27" fill="url(#eye-gem)"/><ellipse cx="418" cy="321" rx="6" ry="5" fill="#fff7e6"/><ellipse cx="528" cy="319" rx="6" ry="5" fill="#fff7e6"/><circle cx="438" cy="348" r="2.4" fill="#e7bcb3"/><circle cx="548" cy="346" r="2.4" fill="#e7bcb3"/><circle cx="417" cy="351" r="1.5" fill="#f4d8a2"/><circle cx="527" cy="349" r="1.5" fill="#f4d8a2"/></g>
+                <path id="mouth" d="M473 371Q480 377 487 371" stroke="#a47e8b" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+                <path d="M477 358Q480 355 483 358" stroke="#c49ba5" stroke-width="2" stroke-linecap="round" fill="none"/>
+              </g>
             </g>
-            <g id="handles" fill="none" stroke="#7b9466" stroke-width="1.4" stroke-dasharray="3 5"><circle id="handle-ear-0" r="39"/><circle id="handle-ear-1" r="39"/><circle id="handle-body-left" r="25"/><circle id="handle-body-right" r="25"/><circle id="handle-body-bottom" r="25"/></g>
-            <g id="hand-cursor" opacity="0"><circle class="cursor-halo" r="34" fill="#f1d36c" fill-opacity=".16"/><circle id="cursor-ring" r="21" fill="none" stroke="#506844" stroke-width="2.4"/><circle r="4" fill="#506844"/><path id="cursor-pinch" d="m-6 1 4 4 9-10" stroke="#506844" stroke-width="2.5" fill="none" opacity="0"/><text id="cursor-label" x="0" y="-42" text-anchor="middle" fill="#435337" font-size="17" font-family="sans-serif">靠近耳朵或身体</text></g>
-            <g class="ear-hint"><path d="M278 177Q301 127 345 142" fill="none" stroke="#99a18b" stroke-width="1.3" stroke-dasharray="4 5"/><path d="m337 135 10 7-12 5" fill="none" stroke="#99a18b" stroke-width="1.3"/><text x="211" y="200" fill="#8d9581" font-size="16" font-family="sans-serif" transform="rotate(-8 211 200)">试着把耳朵拉长一点</text></g>
+            <path id="contour-guide" fill="none" stroke="#aa92bd" stroke-width="1" stroke-dasharray="2 7" opacity=".38"/>
+            <circle id="surface-target" r="14" fill="#edc9b2" fill-opacity=".15" stroke="#b29ac5" stroke-width="1.4" stroke-dasharray="3 4" opacity="0"/>
+            <g id="hand-cursor" opacity="0"><circle class="cursor-halo" r="34" fill="#d9bfe4" fill-opacity=".2"/><circle id="cursor-ring" r="21" fill="none" stroke="#9274a6" stroke-width="2.4"/><circle r="4" fill="#9274a6"/><path id="cursor-pinch" d="m-6 1 4 4 9-10" stroke="#9274a6" stroke-width="2.5" fill="none" opacity="0"/><text id="cursor-label" x="0" y="-42" text-anchor="middle" fill="#79628b" font-size="17" font-family="sans-serif">任意位置都能捏</text></g>
+            <g class="ear-hint"><path d="M249 345Q258 302 308 303" fill="none" stroke="#b4a3bc" stroke-width="1.3" stroke-dasharray="4 5"/><text x="171" y="371" fill="#a18bad" font-size="16" font-family="sans-serif" transform="rotate(-8 171 371)">从这里，长出新的可能</text></g>
           </svg>
           <div class="stage-bottom"><span><i></i> <span id="mood-text">今天也有无限可能</span></span><span class="mono" id="edit-counter">00 次塑形</span></div>
           <div class="toast" id="toast" role="status"></div>
         </div>
-        <div class="lab-footer"><div><span class="live-dot" id="live-dot"></span><span id="tracking-status" role="status" aria-live="polite">摄像头未开启</span></div><button id="reset-button">${icon('reset')} 重置形态</button></div>
+        <div class="sculpt-toolbar"><span>自由生长 <small>整个轮廓都可塑形</small></span><label for="brush-size">拉伸粗细</label><input id="brush-size" type="range" min="16" max="90" value="32"/><output id="brush-label" for="brush-size">纤细触须</output></div>
+        <div class="lab-footer"><div><span class="live-dot" id="live-dot"></span><span id="tracking-status" role="status" aria-live="polite">摄像头未开启</span></div><div class="shape-actions"><button id="undo-button" disabled>${icon('reset')} 撤销一步</button><button id="reset-button">${icon('reset')} 重置形态</button></div></div>
       </section>
 
       <aside class="control-panel">
@@ -94,12 +96,12 @@ document.querySelector('#app').innerHTML = `
       </aside>
     </div>
 
-    <section class="steps" aria-label="三步手势操作指南"><div class="steps-heading"><span>HOW TO PLAY</span><h2>把奇思妙想<br/>交给双手。</h2></div><article><span class="step-number">01</span><div><h3>靠近，找到它</h3><p>手掌面对镜头，让光标靠近<br/>耳朵或身体的虚线区域。</p></div><span class="step-sketch">◎</span></article><article><span class="step-number">02</span><div><h3>捏住，慢慢拉</h3><p>拇指与食指捏合，移动手部，<br/>拉出你喜欢的模样。</p></div><span class="step-sketch">↗</span></article><article><span class="step-number">03</span><div><h3>松开，就是新生</h3><p>张开手指，形状就会留下。<br/>每一点不同，都值得被收容。</p></div><span class="step-sketch sparkle">✧</span></article></section>
+    <section class="steps" aria-label="三步手势操作指南"><div class="steps-heading"><span>HOW TO PLAY</span><h2>把奇思妙想<br/>交给双手。</h2></div><article><span class="step-number">01</span><div><h3>靠近，找到它</h3><p>手掌面对镜头，让光标靠近<br/>身体任意位置。</p></div><span class="step-sketch">◎</span></article><article><span class="step-number">02</span><div><h3>捏住，慢慢拉</h3><p>拇指与食指捏合，移动手部，<br/>拉出你喜欢的模样。</p></div><span class="step-sketch">↗</span></article><article><span class="step-number">03</span><div><h3>松开，就是新生</h3><p>张开手指，形状就会留下。<br/>每一点不同，都值得被收容。</p></div><span class="step-sketch sparkle">✧</span></article></section>
     <footer class="site-footer"><span>未名生物收容所 <i>© 2026</i></span><p>没有标准答案的形状，只有独一无二的你。</p><span class="mono">MADE OF A LITTLE IMAGINATION ${icon('arrow')}</span></footer>
   </main>
 
-  <dialog id="guide-dialog"><button class="dialog-close icon-button" aria-label="关闭指南">${icon('close')}</button><span class="eyebrow">A SMALL FIELD GUIDE</span><h2>让我们隔空认识一下。</h2><p>在 Chrome 或 Edge 中开启摄像头，让一只手完整入镜。镜像画面中向右移动，观察室里的光标也会向右移动。</p><ol><li><strong>找位置：</strong>看着观察室的圆形光标，移动到耳朵或身体。光标显示“可以捏住”时即可抓取。</li><li><strong>捏合拉伸：</strong>拇指与食指靠拢并保持，缓慢移动。耳朵可以拉长、转向，身体可以向左右或下方拉伸。</li><li><strong>松手定型：</strong>分开两指，糯糯轻轻回弹后保留新形状。每次抓取都需要先张开，再捏合。</li></ol><p class="dialog-note">距离镜头约 40–80 cm、光线均匀，避免两根手指互相遮挡。若捏合难识别，可稍微提高灵敏度。手部丢失超过 350 ms 会自动松手定型。按 Esc 可随时结束当前抓取。</p><button class="primary-button dialog-done">明白了，开始创造 ${icon('arrow')}</button></dialog>
-  <dialog id="archive-dialog"><button class="dialog-close icon-button" aria-label="关闭物种档案">${icon('close')}</button><span class="eyebrow">SPECIMEN ARCHIVE / 001</span><h2>糯糯，还没有被定义。</h2><p>软乎乎科的第一位住客。长长的耳朵负责接收奇思妙想，圆圆的身体负责装下所有不同。</p><dl class="specimen-facts"><div><dt>初始形态</dt><dd>双长耳 · 豆豆眼 · 橡皮泥身体</dd></div><div><dt>可塑区域</dt><dd>左右耳朵 / 身体两侧 / 身体下缘</dd></div><div><dt>当前塑形次数</dt><dd id="archive-count">0 次</dd></div><div><dt>档案状态</dt><dd>本次会话中持续生长，刷新后回到初始形态</dd></div></dl><p class="dialog-note">这是「未名生物收容所」毕业设计的交互可行性原型。真正的独一无二，从你伸出手的那一刻开始。</p><button class="primary-button dialog-done">回到观察室 ${icon('arrow')}</button></dialog>
+  <dialog id="guide-dialog"><button class="dialog-close icon-button" aria-label="关闭指南">${icon('close')}</button><span class="eyebrow">A SMALL FIELD GUIDE</span><h2>让我们隔空认识一下。</h2><p>在 Chrome 或 Edge 中开启摄像头，让一只手完整入镜。镜像画面中向右移动，观察室里的光标也会向右移动。</p><ol><li><strong>找位置：</strong>看着观察室的圆形光标，移动到整个轮廓。光标显示“可以捏住”时即可抓取。</li><li><strong>捏合拉伸：</strong>拇指与食指靠拢并保持，缓慢移动。可拉长耳朵、拉宽身体；从不同位置反复拉出触须，再抓住已有触须继续塑形或分叉。用“拉伸粗细”调节局部影响范围。</li><li><strong>松手定型：</strong>分开两指，弥弥轻轻回弹后保留新形状。每次抓取都需要先张开，再捏合。</li></ol><p class="dialog-note">距离镜头约 40–80 cm、光线均匀，避免两根手指互相遮挡。若捏合难识别，可稍微提高灵敏度。手部丢失超过 350 ms 会自动松手定型。按 Esc 可随时结束当前抓取。</p><button class="primary-button dialog-done">明白了，开始创造 ${icon('arrow')}</button></dialog>
+  <dialog id="archive-dialog"><button class="dialog-close icon-button" aria-label="关闭物种档案">${icon('close')}</button><span class="eyebrow">SPECIMEN ARCHIVE / 002</span><h2>弥弥，还没有被定义。</h2><p>月光软体科的新住客。珠光的皮肤收藏着月亮的颜色，下垂的花瓣耳朵感受每一次靠近。没有固定的四肢数量，也没有必须长成的样子。</p><img class="concept-image" src="${import.meta.env.BASE_URL}concept-mimi.png" alt="弥弥的原创形象设定与多触须形态参考"/><dl class="specimen-facts"><div><dt>初始形态</dt><dd>珠光淡紫 · 星点眼睛 · 花瓣垂耳</dd></div><div><dt>可塑区域</dt><dd>整个连续轮廓 / 自由触须 / 触须分叉</dd></div><div><dt>当前塑形次数</dt><dd id="archive-count">0 次</dd></div><div><dt>档案状态</dt><dd>本次会话中持续生长，刷新后回到初始形态</dd></div></dl><p class="dialog-note">这是「未名生物收容所」毕业设计的交互可行性原型。真正的独一无二，从你伸出手的那一刻开始。</p><button class="primary-button dialog-done">回到观察室 ${icon('arrow')}</button></dialog>
 `;
 
 const $ = (id) => document.getElementById(id);
@@ -133,7 +135,8 @@ function release(notify = true) {
     releasedAt = performance.now();
     $('edit-counter').textContent = `${String(sculpture.changes).padStart(2, '0')} 次塑形`;
     $('archive-count').textContent = `${sculpture.changes} 次`;
-    if (notify) toast('新形状已留下，糯糯很喜欢。');
+    $('undo-button').disabled = sculpture.history.length === 0;
+    if (notify) toast('新形状已留下，弥弥很喜欢。');
   }
 }
 
@@ -182,9 +185,9 @@ function updateStatus() {
   $('stage-state').classList.toggle('sculpting', sculpting);
   $('gesture-title').textContent = title;
   $('gesture-symbol').classList.toggle('engaged', !!pinched);
-  $('gesture-description').textContent = sculpting ? `${sculpture.grab.kind === 'ears' ? '耳朵' : '身体'}已抓住，慢慢移动你的手` : pinched ? escapeLatch ? '已结束抓取，请先张开手指' : '请先松开，再靠近虚线区域捏合' : tracking ? hover ? '位置刚刚好，捏合拇指与食指' : '移动光标，靠近耳朵或身体' : active ? '将一只手完整放入摄像头画面' : '开启摄像头后，将一只手放入画面';
+  $('gesture-description').textContent = sculpting ? '局部轮廓已抓住，慢慢拉出新的形状' : pinched ? escapeLatch ? '已结束抓取，请先张开手指' : '请先松开，再靠近虚线区域捏合' : tracking ? hover ? '位置刚刚好，捏合拇指与食指' : '移动光标，靠近整个轮廓' : active ? '将一只手完整放入摄像头画面' : '开启摄像头后，将一只手放入画面';
   $('tracking-status').textContent = cameraState === 'requesting' ? '等待摄像头授权…' : cameraState === 'loading' ? '正在加载本地手部模型…' : cameraState === 'error' ? '摄像头或追踪暂不可用' : active ? tracking ? '已识别 1 只手 · 追踪中' : '摄像头已连接 · 等待手部入镜' : '摄像头未开启';
-  $('stage-tip').innerHTML = `${icon(sculpting ? 'expand' : 'hand')} ${sculpting ? '保持捏合移动，松开即可定型' : tracking ? '让光标靠近虚线区域，再轻轻捏住' : active ? '手掌面对镜头，让五根手指完整入镜' : '打开摄像头，和糯糯打个招呼'}`;
+  $('stage-tip').innerHTML = `${icon(sculpting ? 'expand' : 'hand')} ${sculpting ? '保持捏合移动，松开即可定型' : tracking ? '任意位置捏合向外拉，可反复长出触须' : active ? '手掌面对镜头，让五根手指完整入镜' : '打开摄像头，和弥弥打个招呼'}`;
   $('stage').classList.toggle('is-sculpting', sculpting);
 }
 
@@ -234,7 +237,7 @@ const tracker = new CameraTracker(video, {
     if (currentGesture.started && !escapeLatch) {
       const hit = sculpture.begin(cursor);
       if (hit) { $('mood-text').textContent = '咦？我要变成什么样子啦'; blinkUntil = now + 130; }
-      else toast('还差一点：先张开手指，靠近耳朵或身体再捏合。');
+      else toast('还差一点：先张开手指，靠近整个轮廓再捏合。');
     }
     if (currentGesture.pinched && sculpture.grab) sculpture.move(cursor);
     if (currentGesture.ended) release();
@@ -254,9 +257,25 @@ $('camera-button').addEventListener('click', () => {
 $('reset-button').addEventListener('click', () => {
   sculpture.reset();
   escapeLatch = true;
-  $('edit-counter').textContent = '00 次塑形'; $('archive-count').textContent = '0 次';
+  $('edit-counter').textContent = '00 次塑形'; $('archive-count').textContent = '0 次'; $('undo-button').disabled = true;
   $('mood-text').textContent = '今天也有无限可能';
   updateStatus(); toast('回到最初的软乎乎，重新想象吧。');
+});
+$('brush-size').addEventListener('input', event => {
+  const value = Number(event.target.value); sculpture.radius = value;
+  $('brush-label').textContent = value < 39 ? '纤细触须' : value < 65 ? '柔软肢体' : '宽幅塑形';
+});
+function undoShape() {
+  if (!sculpture.undo()) return;
+  escapeLatch = true;
+  $('edit-counter').textContent = `${String(sculpture.changes).padStart(2, '0')} 次塑形`;
+  $('archive-count').textContent = `${sculpture.changes} 次`;
+  $('undo-button').disabled = sculpture.history.length === 0;
+  updateStatus(); toast('退回上一个形状，继续想象。');
+}
+$('undo-button').addEventListener('click', undoShape);
+document.addEventListener('keydown', event => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) { event.preventDefault(); undoShape(); }
 });
 $('sensitivity').addEventListener('input', (event) => {
   const value = Number(event.target.value);
@@ -283,34 +302,34 @@ window.addEventListener('pagehide', () => tracker.stop());
 function render(now, previous = now) {
   sculpture.tick((now - previous) / 1000 || 1 / 60);
   const shape = sculpture.display;
-  for (let i = 0; i < 2; i++) {
-    $(`ear-${i}`).setAttribute('d', earPath(i, shape.ears[i]));
-    $(`ear-inner-${i}`).setAttribute('d', earPath(i, shape.ears[i], true));
-    $(`handle-ear-${i}`).setAttribute('cx', shape.ears[i].x);
-    $(`handle-ear-${i}`).setAttribute('cy', shape.ears[i].y);
-  }
-  $('body').setAttribute('d', closedCurve(shape.body));
-  for (const [name, index] of [['left', 6], ['right', 2], ['bottom', 4]]) {
-    $(`handle-body-${name}`).setAttribute('cx', shape.body[index].x);
-    $(`handle-body-${name}`).setAttribute('cy', shape.body[index].y);
-  }
-  const bodyCenter = { x: (shape.body[6].x + shape.body[2].x) / 2, y: (shape.body[0].y + shape.body[4].y) / 2 + 8 };
-  $('belly').setAttribute('cx', bodyCenter.x); $('belly').setAttribute('cy', bodyCenter.y);
-  $('belly').setAttribute('rx', (shape.body[2].x - shape.body[6].x) * 0.30);
-  $('belly').setAttribute('ry', (shape.body[4].y - shape.body[0].y) * 0.34);
-  $('belly-mark').setAttribute('transform', `translate(${bodyCenter.x - 480} ${bodyCenter.y - 480})`);
-  $('foot-left').setAttribute('cx', shape.body[5].x + 10); $('foot-left').setAttribute('cy', shape.body[5].y + 11);
-  $('foot-right').setAttribute('cx', shape.body[3].x - 10); $('foot-right').setAttribute('cy', shape.body[3].y + 11);
-  $('ground-shadow').setAttribute('rx', clamp((shape.body[2].x - shape.body[6].x) * 0.7, 100, 260));
-  $('ground-shadow').setAttribute('cy', Math.max(shape.body[3].y, shape.body[4].y, shape.body[5].y) + 30);
+  const contour = closedCurve(shape.body);
+  $('body').setAttribute('d', contour);
+  $('contour-guide').setAttribute('d', contour);
+  const skin = (x, y) => skinPoint({ x, y }, shape.body);
+  const pointString = ([x, y]) => { const p = skin(x, y); return `${p.x} ${p.y}`; };
+  const paintedCurve = points => `M ${pointString(points[0])} C ${points.slice(1, 4).map(pointString).join(', ')} C ${points.slice(4, 7).map(pointString).join(', ')} Z`;
+  $('ear-inner-0').setAttribute('d', paintedCurve([[354, 321], [350, 383], [314, 468], [328, 480], [344, 476], [362, 390], [369, 340]]));
+  $('ear-inner-1').setAttribute('d', paintedCurve([[596, 314], [610, 373], [645, 451], [634, 465], [619, 469], [590, 376], [585, 343]]));
+  $('head-shine').setAttribute('d', `M ${pointString([377, 275])} Q ${pointString([403, 240])} ${pointString([439, 238])}`);
+  const glow = skin(437, 280); $('head-glow').setAttribute('cx', glow.x); $('head-glow').setAttribute('cy', glow.y);
+  const belly = skin(476, 488); $('belly').setAttribute('cx', belly.x); $('belly').setAttribute('cy', belly.y);
+  const left = skin(420, 340), right = skin(540, 340), top = skin(480, 290), bottom = skin(480, 390), center = skin(480, 340);
+  const a = clamp((right.x - left.x) / 120, .65, 1.5), b = clamp((right.y - left.y) / 120, -.5, .5);
+  const c = clamp((bottom.x - top.x) / 100, -.5, .5), d = clamp((bottom.y - top.y) / 100, .65, 1.5);
+  $('face').setAttribute('transform', `matrix(${a} ${b} ${c} ${d} ${center.x - a * 480 - c * 340} ${center.y - b * 480 - d * 340})`);
+  const xs = shape.body.map(p => p.x), ys = shape.body.map(p => p.y);
+  $('ground-shadow').setAttribute('rx', clamp((Math.max(...xs) - Math.min(...xs)) * .48, 100, 330));
+  $('ground-shadow').setAttribute('cy', Math.min(675, Math.max(...ys) + 23));
+  $('surface-target').setAttribute('opacity', hover && cursor ? .9 : 0);
+  if (hover && cursor) { $('surface-target').setAttribute('cx', hover.point.x); $('surface-target').setAttribute('cy', hover.point.y); $('surface-target').setAttribute('r', Math.min(28, sculpture.radius * .6)); }
   const breathing = sculpture.grab ? 0 : Math.sin(now / 1100) * 1.7;
   $('creature').setAttribute('transform', `translate(0 ${breathing})`);
   if (now > nextBlink) { blinkUntil = now + 160; nextBlink = now + 2600 + Math.random() * 4000; }
   const blink = now < blinkUntil ? 0.12 : 1;
-  $('eyes').setAttribute('transform', `translate(0 ${323 * (1 - blink)}) scale(1 ${blink})`);
-  const expression = sculpture.grab ? 'M470 345Q480 364 490 345Z' : now - releasedAt < 1800 ? 'M467 343Q480 362 493 343' : 'M469 344Q480 356 491 344';
+  $('eyes').setAttribute('transform', `translate(0 ${334 * (1 - blink)}) scale(1 ${blink})`);
+  const expression = sculpture.grab ? 'M474 370Q480 385 486 370Z' : now - releasedAt < 1800 ? 'M471 370Q480 382 489 370' : 'M473 371Q480 377 487 371';
   $('mouth').setAttribute('d', expression);
-  $('mouth').setAttribute('fill', sculpture.grab ? '#6a7755' : 'none');
+  $('mouth').setAttribute('fill', sculpture.grab ? '#aa7d99' : 'none');
   if (!sculpture.grab && releasedAt && now - releasedAt < 3000) $('mood-text').textContent = '嗯！这个样子，也很喜欢';
   // Pause interaction behind modal dialogs and if video stops producing frames.
   if (document.querySelector('dialog[open]') && sculpture.grab) { release(false); escapeLatch = true; updateStatus(); }
@@ -320,8 +339,8 @@ function render(now, previous = now) {
     $('hand-cursor').setAttribute('transform', `translate(${cursor.x} ${cursor.y})`);
     const engaged = currentGesture?.pinched;
     $('cursor-ring').setAttribute('r', engaged ? 15 : hover ? 24 : 21);
-    $('cursor-ring').setAttribute('stroke', sculpture.grab ? '#bf9635' : '#506844');
-    $('cursor-label').textContent = sculpture.grab ? '正在塑形 · 松开定型' : engaged ? '已捏合' : hover ? '可以捏住' : '靠近耳朵或身体';
+    $('cursor-ring').setAttribute('stroke', sculpture.grab ? '#d3a184' : '#9274a6');
+    $('cursor-label').textContent = sculpture.grab ? '正在塑形 · 松开定型' : engaged ? '已捏合' : hover ? '可以捏住' : '任意位置都能捏';
     $('cursor-pinch').setAttribute('opacity', engaged ? 1 : 0);
   }
   if (cameraState === 'active' && now - lastFpsTime > 1000) {
