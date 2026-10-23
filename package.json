@@ -1,0 +1,22 @@
+{
+  "name": "unnamed-creature-shelter",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/prepare-mediapipe.mjs",
+    "dev": "vite --host 0.0.0.0",
+    "build": "node scripts/prepare-mediapipe.mjs && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test tests/*.test.js",
+    "test:browser": "playwright test"
+  },
+  "dependencies": {
+    "@mediapipe/hands": "0.4.1675469240"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "vite": "8.3.5"
+  },
+  "engines": { "node": ">=22.12.0" }
+}
