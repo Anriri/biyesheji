@@ -31,4 +31,36 @@ main {
   overflow: visible;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: none;
 }
+
+#body { cursor: grab; }
+#eyes { pointer-events: none; }
+.scene.is-sculpting, .scene.is-sculpting #body { cursor: grabbing; }
+.tools {
+  position: fixed;
+  left: 50%;
+  bottom: max(28px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 8px;
+  border: 1px solid #e7e4e0;
+  border-radius: 30px;
+  background: #fbfaf8dc;
+}
+.tools span { width: 1px; height: 12px; background: #e5e1dd; }
+.tools button {
+  border: 0;
+  padding: 7px 15px;
+  border-radius: 20px;
+  background: transparent;
+  color: #85817d;
+  font: 12px/1.5 system-ui, sans-serif;
+  cursor: pointer;
+  transition: color .15s, background .15s;
+}
+.tools button:hover:not(:disabled) { background: #eeebe7; color: #514c48; }
+.tools button:disabled { color: #c9c5c0; cursor: default; }
+.tools button:focus-visible { outline: 2px solid #b2aaa1; outline-offset: 2px; }

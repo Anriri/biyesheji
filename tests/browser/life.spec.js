@@ -10,15 +10,17 @@ test.beforeEach(async ({ page }) => {
   await page.route(entry, route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: html }));
 });
 
-test('单文件初生动画：无界面文字、按钮、外部资源请求，自动活动和眨眼', async ({ page }) => {
+test('单文件团子：只增加撤销和重置，保持纯白形象、自动动画及离线资源', async ({ page }) => {
   const errors = [], external = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => { if (/^https?:/.test(request.url()) && request.url() !== entry) external.push(request.url()); });
   await page.goto(entry);
   await expect(page.locator('#body')).toHaveAttribute('d', /^M /);
   await expect(page.locator('#body')).toHaveAttribute('fill', '#ffffff');
-  expect(await page.locator('body').innerText()).toBe('');
-  await expect(page.locator('button, input, nav, video, canvas')).toHaveCount(0);
+  await expect(page.locator('button')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: '撤销', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '重置', exact: true })).toBeDisabled();
+  await expect(page.locator('input, nav, video, canvas')).toHaveCount(0);
   await expect(page.locator('#eyes ellipse')).toHaveCount(2);
   const samples = await page.evaluate(() => new Promise(resolve => {
     const start = performance.now();
@@ -55,4 +57,52 @@ test('初生动画移动端可见且没有横向溢出', async ({ page }) => {
   expect(eye.x).toBeGreaterThan(0);
   expect(eye.x + eye.width).toBeLessThan(390);
   await page.screenshot({ path: 'test-results/life-mobile.png' });
+});
+
+test('鼠标实时拉伸并保留形状，眼睛始终在身体内，撤销与重置不停止动画', async ({ page }) => {
+  await page.goto(entry);
+  const width = () => page.locator('#body').evaluate(p => p.getBBox().width);
+  const original = await width();
+  async function pull(dx, dy) {
+    const from = await page.locator('#body').evaluate(p => {
+      const b = p.getBBox(), q = new DOMPoint(b.x + b.width * .98, b.y + b.height * .55).matrixTransform(p.getScreenCTM());
+      return { x: q.x, y: q.y };
+    });
+    await page.mouse.move(from.x, from.y); await page.mouse.down();
+    await page.mouse.move(from.x + dx, from.y + dy, { steps: 15 });
+    await expect(page.locator('.scene')).toHaveClass(/is-sculpting/);
+    await page.mouse.up();
+    await expect(page.getByRole('button', { name: '撤销', exact: true })).toBeEnabled();
+  }
+  await pull(76, -8);
+  await expect.poll(width).toBeGreaterThan(original + 22);
+  await page.waitForTimeout(1100);
+  expect(await width()).toBeGreaterThan(original + 22);
+  const allInside = await page.evaluate(() => new Promise(resolve => {
+    const start = performance.now();
+    function sample(now) {
+      const body = document.getElementById('body');
+      for (const eye of document.querySelectorAll('#eyes ellipse')) for (let i = 0; i < 12; i++) {
+        const angle = i * Math.PI / 6;
+        const x = Number(eye.getAttribute('cx')) + Number(eye.getAttribute('rx')) * Math.cos(angle);
+        const y = Number(eye.getAttribute('cy')) + Number(eye.getAttribute('ry')) * Math.sin(angle);
+        if (!body.isPointInFill(new DOMPoint(x, y))) return resolve(false);
+      }
+      if (now - start < 1000) requestAnimationFrame(sample); else resolve(true);
+    }
+    requestAnimationFrame(sample);
+  }));
+  expect(allInside).toBe(true);
+  await page.keyboard.press('Control+z');
+  await expect.poll(width).toBeLessThan(original + 12);
+  await expect(page.getByRole('button', { name: '撤销', exact: true })).toBeDisabled();
+  await pull(66, 10);
+  await expect.poll(width).toBeGreaterThan(original + 20);
+  await page.getByRole('button', { name: '重置', exact: true }).click();
+  await expect.poll(width).toBeLessThan(original + 12);
+  await page.getByRole('button', { name: '撤销', exact: true }).click();
+  await expect.poll(width).toBeGreaterThan(original + 20);
+  const before = await page.locator('#body').getAttribute('d');
+  await expect(page.locator('#body')).not.toHaveAttribute('d', before);
+  await page.screenshot({ path: 'test-results/life-sculpted.png' });
 });

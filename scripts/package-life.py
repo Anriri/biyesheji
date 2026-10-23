@@ -1,6 +1,7 @@
 """Package the white creature as a single, dependency-free HTML plus editable sources."""
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
+from shutil import copyfile
 
 root = Path(__file__).resolve().parent.parent
 source = root / 'life-prototype'
@@ -17,10 +18,12 @@ destination.parent.mkdir(exist_ok=True)
 with ZipFile(destination, 'w', ZIP_DEFLATED) as archive:
     archive.writestr('unnamed-creature-life/打开动画.html', html.encode('utf-8'))
     archive.writestr('unnamed-creature-life/先读我.txt', (
-        '未名生物收容所 · 初生动画\n\n'
+        '未名生物收容所 · 白色团子生命感与塑形\n\n'
         '全部解压后，双击“打开动画.html”。\n'
         '不需要安装、不需要命令、不需要联网、不需要摄像头。\n'
-        '动画自动播放，画面里只有白色软团子和深色眼睛。\n'
+        '动画自动播放，白色团子保留浮动、摇晃、眨眼。\n'
+        '鼠标按住轮廓拖动，可局部拉长、压扁；松开轻微回弹并定型。\n'
+        '点击撤销或按 Ctrl+Z 回退，点击重置恢复初始形状。重置也能撤销。\n'
         '推荐 Chrome、Edge、Firefox 或 Safari。\n'
         'source 文件夹包含可编辑的 HTML、CSS、JavaScript 与说明。\n'
     ).encode('utf-8-sig'))
@@ -28,4 +31,5 @@ with ZipFile(destination, 'w', ZIP_DEFLATED) as archive:
         archive.write(source / name, f'unnamed-creature-life/source/{name}')
 with ZipFile(destination) as archive:
     assert archive.testzip() is None
+copyfile(destination, destination.with_name('unnamed-creature-life-sculpt.zip'))
 print(f'Standalone HTML and ZIP prepared: {destination} ({destination.stat().st_size:,} bytes)')

@@ -41,13 +41,45 @@ main {
   overflow: visible;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: none;
 }
+
+#body { cursor: grab; }
+#eyes { pointer-events: none; }
+.scene.is-sculpting, .scene.is-sculpting #body { cursor: grabbing; }
+.tools {
+  position: fixed;
+  left: 50%;
+  bottom: max(28px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 8px;
+  border: 1px solid #e7e4e0;
+  border-radius: 30px;
+  background: #fbfaf8dc;
+}
+.tools span { width: 1px; height: 12px; background: #e5e1dd; }
+.tools button {
+  border: 0;
+  padding: 7px 15px;
+  border-radius: 20px;
+  background: transparent;
+  color: #85817d;
+  font: 12px/1.5 system-ui, sans-serif;
+  cursor: pointer;
+  transition: color .15s, background .15s;
+}
+.tools button:hover:not(:disabled) { background: #eeebe7; color: #514c48; }
+.tools button:disabled { color: #c9c5c0; cursor: default; }
+.tools button:focus-visible { outline: 2px solid #b2aaa1; outline-offset: 2px; }
 
 </style>
   </head>
   <body>
     <main>
-      <svg class="scene" viewBox="0 80 640 480" role="img" aria-label="一个只有深色眼睛的纯白软团子，轻轻浮动、摇晃和眨眼">
+      <svg class="scene" viewBox="0 80 640 480" role="img" aria-label="可按住轮廓拖动塑形的纯白软团子，持续浮动、摇晃和眨眼">
         <defs>
           <radialGradient id="floor-softness">
             <stop offset="0" stop-color="#aaa6a0" stop-opacity=".21" />
@@ -67,6 +99,11 @@ main {
           </g>
         </g>
       </svg>
+      <div class="tools" role="group" aria-label="塑形操作">
+        <button id="undo" type="button" disabled title="撤销上一次塑形（Ctrl+Z / ⌘Z）">撤销</button>
+        <span aria-hidden="true"></span>
+        <button id="reset" type="button" disabled title="恢复初始形状，仍可撤销">重置</button>
+      </div>
     </main>
     <script>
 /* Classic script by design: no imports, fetches, dependencies, camera, or local server. */
@@ -93,14 +130,14 @@ main {
     };
   }
 
-  function makeContour(time, pose, amount = 1) {
+  function makeContour(time, pose, amount = 1, shape = null) {
     const points = [];
     for (let i = 0; i < 32; i++) {
       const angle = TAU * i / 32;
       const rest = 1 + .042 * Math.sin(3 * angle + .6) + .018 * Math.cos(2 * angle - .8);
       const ripple = amount * (.011 * Math.sin(2 * angle - time * 1.30) + .007 * Math.sin(3 * angle + time * .81 + .8));
-      const x = Math.sin(angle) * 112 * (1 - .16 * Math.cos(angle)) * (rest + ripple);
-      const y = -108 - Math.cos(angle) * 106 * (rest + ripple);
+      const x = (shape ? shape[i].x : Math.sin(angle) * 112 * (1 - .16 * Math.cos(angle)) * rest) + Math.sin(angle) * 112 * (1 - .16 * Math.cos(angle)) * ripple;
+      const y = (shape ? shape[i].y : -108 - Math.cos(angle) * 106 * rest) - Math.cos(angle) * 106 * ripple;
       const topWeight = clamp(-y / 215, 0, 1);
       points.push({ x: x * pose.sx + pose.bend * topWeight * topWeight, y: y * pose.sy });
     }
@@ -126,8 +163,164 @@ main {
     return .06 + .94 * ease((elapsed - .125) / .145);
   }
 
+  const identityPose = { sx: 1, sy: 1, bend: 0 };
+  const REST = makeContour(0, identityPose, 0);
+  const clone = points => points.map(p => ({ x: p.x, y: p.y }));
+  const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  function area(points) {
+    return Math.abs(points.reduce((sum, p, i) => { const q = points[(i + 1) % points.length]; return sum + p.x * q.y - p.y * q.x; }, 0)) / 2;
+  }
+  function inside(point, points) {
+    let result = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const a = points[i], b = points[j];
+      if ((a.y > point.y) !== (b.y > point.y) && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x) result = !result;
+    }
+    return result;
+  }
+  function renderedOutline(points) {
+    const outline = [];
+    const n = points.length;
+    for (let i = 0; i < n; i++) {
+      const a = points[(i + n - 1) % n], b = points[i], c = points[(i + 1) % n], d = points[(i + 2) % n];
+      for (let j = 0; j < 3; j++) {
+        const t = j / 3, m = 1 - t;
+        outline.push({
+          x: (m ** 3 * a.x + (3 * t ** 3 - 6 * t * t + 4) * b.x + (-3 * t ** 3 + 3 * t * t + 3 * t + 1) * c.x + t ** 3 * d.x) / 6,
+          y: (m ** 3 * a.y + (3 * t ** 3 - 6 * t * t + 4) * b.y + (-3 * t ** 3 + 3 * t * t + 3 * t + 1) * c.y + t ** 3 * d.y) / 6,
+        });
+      }
+    }
+    return outline;
+  }
+  // A local material binding moves the eyes with the dough, while keeping both eyes rigid.
+  const faceWeights = REST.map(p => 1 / ((p.x * p.x + (p.y + 120) ** 2 + 700) ** 2));
+  const weightSum = faceWeights.reduce((a, b) => a + b, 0);
+  function faceAnchor(points) {
+    return points.reduce((anchor, p, i) => {
+      const weight = faceWeights[i] / weightSum;
+      anchor.x += (p.x - REST[i].x) * weight;
+      anchor.y += (p.y - REST[i].y) * weight;
+      return anchor;
+    }, { x: 0, y: -120 });
+  }
+  function safeFace(points, desired = faceAnchor(points), extraPadding = 0) {
+    const outline = renderedOutline(points);
+    const center = points.reduce((a, p) => ({ x: a.x + p.x / points.length, y: a.y + p.y / points.length }), { x: 0, y: 0 });
+    function fits(p) {
+      // Full, open eyes plus padding must fit the actual B-spline, not only its control hull.
+      for (const side of [-29, 29]) for (let i = 0; i < 8; i++) {
+        const angle = i * TAU / 8;
+        if (!inside({ x: p.x + side + (15 + extraPadding) * Math.cos(angle), y: p.y + (21 + extraPadding) * Math.sin(angle) }, outline)) return false;
+      }
+      return true;
+    }
+    if (fits(desired)) return desired;
+    for (let i = 1; i <= 10; i++) {
+      const t = i / 10, candidate = { x: desired.x + (center.x - desired.x) * t, y: desired.y + (center.y - desired.y) * t };
+      if (fits(candidate)) return candidate;
+    }
+    const offsets = [];
+    for (let x = -2; x <= 2; x++) for (let y = -2; y <= 2; y++) offsets.push({ x: x * 12, y: y * 12 });
+    offsets.sort((a, b) => a.x * a.x + a.y * a.y - b.x * b.x - b.y * b.y);
+    for (const offset of offsets) {
+      const candidate = { x: center.x + offset.x, y: center.y + offset.y };
+      if (fits(candidate)) return candidate;
+    }
+    return null;
+  }
+  const REST_AREA = area(REST);
+  const restEdges = REST.map((p, i) => distance(p, REST[(i + 1) % REST.length]));
+  const restPerimeter = restEdges.reduce((a, b) => a + b, 0);
+  const cross = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  function validShape(points) {
+    if (points.length !== REST.length || points.some(p => !Number.isFinite(p.x + p.y) || Math.abs(p.x) > 205 || p.y < -285 || p.y > 28)) return false;
+    const xs = points.map(p => p.x), ys = points.map(p => p.y);
+    const width = Math.max(...xs) - Math.min(...xs), height = Math.max(...ys) - Math.min(...ys);
+    if (width < 150 || width > 345 || height < 145 || height > 290) return false;
+    const ratio = area(points) / REST_AREA;
+    if (ratio < .65 || ratio > 1.65) return false;
+    let perimeter = 0;
+    for (let i = 0; i < points.length; i++) {
+      const prev = points[(i + points.length - 1) % points.length], a = points[i], b = points[(i + 1) % points.length];
+      const edge = distance(a, b), strain = edge / restEdges[i]; perimeter += edge;
+      if (strain < .55 || strain > 1.9) return false;
+      const cosine = ((a.x - prev.x) * (b.x - a.x) + (a.y - prev.y) * (b.y - a.y)) / (distance(prev, a) * edge || 1);
+      if (Math.acos(clamp(cosine, -1, 1)) > .72) return false;
+      for (let j = i + 2; j < points.length; j++) {
+        if (i === 0 && j === points.length - 1) continue;
+        const c = points[j], d = points[(j + 1) % points.length];
+        if (cross(a, b, c) * cross(a, b, d) < -1e-8 && cross(c, d, a) * cross(c, d, b) < -1e-8) return false;
+      }
+    }
+    // Reserve extra clearance for breathing, contour recoil and independent gaze motion.
+    return perimeter < restPerimeter * 1.45 && safeFace(points, faceAnchor(points), 5) !== null;
+  }
+  class SoftSculpt {
+    constructor() { this.shape = clone(REST); this.history = []; this.grab = null; }
+    hitTest(point) {
+      let nearest = { distance: Infinity };
+      this.shape.forEach((a, i) => {
+        const b = this.shape[(i + 1) % this.shape.length];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const t = clamp(((point.x - a.x) * dx + (point.y - a.y) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+        const p = { x: a.x + dx * t, y: a.y + dy * t };
+        if (distance(point, p) < nearest.distance) nearest = { index: i, t, distance: distance(point, p) };
+      });
+      return nearest.distance <= 22 || inside(point, this.shape) ? nearest : null;
+    }
+    begin(point) {
+      const hit = this.hitTest(point); if (!hit) return false;
+      const arcs = [0];
+      for (let i = 0; i < this.shape.length; i++) arcs.push(arcs[i] + distance(this.shape[i], this.shape[(i + 1) % this.shape.length]));
+      const total = arcs.at(-1), contact = arcs[hit.index] + (arcs[hit.index + 1] - arcs[hit.index]) * hit.t;
+      const weights = arcs.slice(0, -1).map(a => {
+        const d = Math.abs(a - contact), arc = Math.min(d, total - d);
+        return Math.exp(-.5 * (arc / 65) ** 2);
+      });
+      this.grab = { origin: { x: point.x, y: point.y }, before: clone(this.shape), weights };
+      return true;
+    }
+    move(point) {
+      if (!this.grab || !Number.isFinite(point.x + point.y)) return;
+      const { origin, before, weights } = this.grab;
+      let dx = point.x - origin.x, dy = point.y - origin.y;
+      const length = Math.hypot(dx, dy), limit = length > 110 ? 110 / length : 1;
+      dx *= limit; dy *= limit;
+      const at = t => before.map((p, i) => ({ x: p.x + dx * weights[i] * t, y: p.y + dy * weights[i] * t }));
+      const candidate = at(1);
+      if (validShape(candidate)) { this.shape = candidate; return; }
+      let low = 0, high = 1, accepted = clone(before);
+      for (let i = 0; i < 10; i++) {
+        const t = (low + high) / 2, shape = at(t);
+        if (validShape(shape)) { low = t; accepted = shape; } else high = t;
+      }
+      this.shape = accepted;
+    }
+    release() {
+      if (!this.grab) return false;
+      const changed = this.shape.some((p, i) => distance(p, this.grab.before[i]) > .6);
+      if (changed) this.remember(this.grab.before);
+      else this.shape = clone(this.grab.before);
+      this.grab = null;
+      return changed;
+    }
+    remember(shape) { this.history.push(clone(shape)); if (this.history.length > 40) this.history.shift(); }
+    undo() {
+      if (this.grab) this.release();
+      const shape = this.history.pop(); if (!shape) return false;
+      this.shape = clone(shape); return true;
+    }
+    get changed() { return this.shape.some((p, i) => distance(p, REST[i]) > .6); }
+    reset() {
+      if (this.grab) this.release();
+      if (!this.changed) return false;
+      this.remember(this.shape); this.shape = clone(REST); return true;
+    }
+  }
+
   // Also used by the small, dependency-free numerical regression test.
-  globalThis.CreatureMotion = Object.freeze({ samplePose, makeContour, closedPath, blinkAt });
+  globalThis.CreatureMotion = Object.freeze({ samplePose, makeContour, closedPath, blinkAt, SoftSculpt, validShape, safeFace, renderedOutline });
   if (typeof document === 'undefined') return;
 
   const body = document.getElementById('body');
@@ -135,6 +328,12 @@ main {
   const floor = document.getElementById('floor');
   const eyeLeft = document.getElementById('eye-left');
   const eyeRight = document.getElementById('eye-right');
+  const scene = document.querySelector('.scene');
+  const undoButton = document.getElementById('undo');
+  const resetButton = document.getElementById('reset');
+  const sculpt = new SoftSculpt();
+  let livePose = samplePose(0);
+  let drag = null;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let amount = reduced.matches ? .45 : 1;
   reduced.addEventListener?.('change', event => { amount = event.matches ? .45 : 1; });
@@ -153,6 +352,8 @@ main {
   const gaze = { x: 0, y: 0, vx: 0, vy: 0, targetX: 0, targetY: 0 };
   const points = makeContour(0, samplePose(0, amount), amount);
   const velocities = points.map(() => ({ x: 0, y: 0 }));
+  let lastSafePoints = clone(points);
+  let lastSafeFace = { x: 0, y: -120 };
 
   function integrate(dt, target) {
     const steps = Math.max(1, Math.ceil(dt * 120));
@@ -160,9 +361,9 @@ main {
     for (let step = 0; step < steps; step++) {
       points.forEach((point, i) => {
         // The perimeter lags the center of mass slightly, giving a soft delayed recoil.
-        const stiffness = 90 + 9 * Math.sin(i * TAU / points.length);
+        const stiffness = (sculpt.grab ? 180 : 90) + 9 * Math.sin(i * TAU / points.length);
         for (const axis of ['x', 'y']) {
-          velocities[i][axis] += (stiffness * (target[i][axis] - point[axis]) - 13.5 * velocities[i][axis]) * h;
+          velocities[i][axis] += (stiffness * (target[i][axis] - point[axis]) - (sculpt.grab ? 19 : 13.5) * velocities[i][axis]) * h;
           point[axis] += velocities[i][axis] * h;
         }
       });
@@ -176,14 +377,24 @@ main {
   }
 
   function render(pose) {
+    const anchor = faceAnchor(points);
+    let face = safeFace(points, { x: anchor.x + gaze.x, y: anchor.y + gaze.y }) || safeFace(points);
+    if (face) {
+      lastSafePoints = clone(points); lastSafeFace = face;
+    } else {
+      // Guard rare spring overshoots without changing the user's saved sculpt target.
+      // Keep the most recent safe custom contour; never expose eyes outside the skin.
+      points.forEach((p, i) => { p.x = lastSafePoints[i].x; p.y = lastSafePoints[i].y; velocities[i].x = 0; velocities[i].y = 0; });
+      face = lastSafeFace;
+    }
     body.setAttribute('d', closedPath(points));
     creature.setAttribute('transform', `translate(${320 + pose.drift} ${428 - pose.lift}) rotate(${pose.tilt})`);
     floor.setAttribute('cx', 320 + pose.drift * .3);
-    floor.setAttribute('rx', 112 - pose.lift * .8);
+    floor.setAttribute('rx', (Math.max(...points.map(p => p.x)) - Math.min(...points.map(p => p.x))) * .47 - pose.lift * .8);
     floor.setAttribute('opacity', .95 - pose.lift * .019);
     const blink = blinkAt(time - blinkStart);
-    const faceY = -120 * pose.sy + gaze.y;
-    const faceX = pose.bend * .32 + gaze.x;
+    const faceY = face.y;
+    const faceX = face.x;
     eyeLeft.setAttribute('cx', -29 + faceX);
     eyeRight.setAttribute('cx', 29 + faceX);
     for (const eye of [eyeLeft, eyeRight]) {
@@ -207,13 +418,64 @@ main {
       gazeNext = time + 2.7 + random() * 3.2;
     }
     const pose = samplePose(time, amount);
-    integrate(dt, makeContour(time, pose, amount));
+    livePose = pose;
+    if (drag?.moved) sculpt.move(modelPoint(drag.clientX, drag.clientY, pose));
+    integrate(dt, makeContour(time, pose, amount, sculpt.shape));
     render(pose);
     frameId = requestAnimationFrame(frame);
   }
 
+  function updateControls() {
+    undoButton.disabled = sculpt.history.length === 0 && !sculpt.grab;
+    resetButton.disabled = !sculpt.changed;
+  }
+  function modelPoint(clientX, clientY, pose = livePose) {
+    const stage = new DOMPoint(clientX, clientY).matrixTransform(scene.getScreenCTM().inverse());
+    const dx = stage.x - 320 - pose.drift, dy = stage.y - 428 + pose.lift;
+    const radians = pose.tilt * Math.PI / 180;
+    const x = dx * Math.cos(radians) + dy * Math.sin(radians);
+    const y = (-dx * Math.sin(radians) + dy * Math.cos(radians)) / pose.sy;
+    const topWeight = clamp(-y / 215, 0, 1);
+    return { x: (x - pose.bend * topWeight * topWeight) / pose.sx, y };
+  }
+  scene.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || drag) return;
+    if (!sculpt.begin(modelPoint(event.clientX, event.clientY))) return;
+    event.preventDefault();
+    drag = { id: event.pointerId, clientX: event.clientX, clientY: event.clientY, startX: event.clientX, startY: event.clientY, moved: false };
+    scene.setPointerCapture(event.pointerId); scene.classList.add('is-sculpting');
+  });
+  scene.addEventListener('pointermove', event => {
+    if (!drag || event.pointerId !== drag.id) return;
+    drag.clientX = event.clientX; drag.clientY = event.clientY;
+    if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 3) drag.moved = true;
+    if (drag.moved) sculpt.move(modelPoint(event.clientX, event.clientY));
+  });
+  function finishDrag(event) {
+    if (!drag || (event && event.pointerId !== drag.id)) return;
+    const id = drag.id;
+    if (drag.moved) sculpt.move(modelPoint(drag.clientX, drag.clientY));
+    sculpt.release(); drag = null;
+    scene.classList.remove('is-sculpting');
+    if (scene.hasPointerCapture(id)) scene.releasePointerCapture(id);
+    updateControls();
+  }
+  scene.addEventListener('pointerup', finishDrag);
+  scene.addEventListener('pointercancel', finishDrag);
+  scene.addEventListener('lostpointercapture', finishDrag);
+  function undo() { finishDrag(); sculpt.undo(); updateControls(); }
+  function reset() { finishDrag(); sculpt.reset(); updateControls(); }
+  undoButton.addEventListener('click', undo);
+  resetButton.addEventListener('click', reset);
+  document.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); undo(); }
+    if (event.key === 'Escape') finishDrag();
+  });
+  updateControls();
+
   // Pausing the simulation clock avoids a jump or fast-forward after a hidden tab resumes.
   document.addEventListener('visibilitychange', () => {
+    finishDrag();
     cancelAnimationFrame(frameId);
     lastFrame = null;
     if (!document.hidden) frameId = requestAnimationFrame(frame);

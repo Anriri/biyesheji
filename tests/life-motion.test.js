@@ -6,6 +6,7 @@ import vm from 'node:vm';
 const context = {};
 vm.runInNewContext(readFileSync(new URL('../life-prototype/creature.js', import.meta.url), 'utf8'), context);
 const { samplePose, makeContour, closedPath, blinkAt } = context.CreatureMotion;
+const { SoftSculpt, validShape, safeFace, renderedOutline } = context.CreatureMotion;
 const area = points => Math.abs(points.reduce((sum, p, i) => {
   const q = points[(i + 1) % points.length];
   return sum + p.x * q.y - p.y * q.x;
@@ -59,4 +60,60 @@ test('初生动画：减少动态效果偏好只降低幅度，不停止生命�
   const normal = samplePose(2), gentle = samplePose(2, .45);
   assert.ok(gentle.lift > 0 && gentle.lift < normal.lift);
   assert.ok(Math.abs(gentle.sy - 1) < Math.abs(normal.sy - 1));
+});
+
+test('团子塑形：轮廓任意位置可抓取，相邻点柔软跟随，松手保留', () => {
+  const sculpt = new SoftSculpt();
+  const original = JSON.stringify(sculpt.shape);
+  assert.equal(sculpt.begin({ x: 240, y: -100 }), false);
+  assert.equal(sculpt.begin({ x: 111, y: -100 }), true);
+  sculpt.move({ x: 111, y: -100 }); assert.equal(sculpt.release(), false);
+  assert.equal(JSON.stringify(sculpt.shape), original);
+  sculpt.begin({ x: 111, y: -100 }); sculpt.move({ x: 166, y: -100 });
+  const held = JSON.stringify(sculpt.shape);
+  assert.notEqual(held, original);
+  assert.ok(validShape(sculpt.shape));
+  assert.equal(sculpt.release(), true);
+  for (let t = 0; t < 20; t += .1) makeContour(t, samplePose(t), 1, sculpt.shape);
+  assert.equal(JSON.stringify(sculpt.shape), held, 'idle animation must never overwrite the user shape');
+  assert.equal(sculpt.shape.length, 32);
+});
+
+test('团子塑形：压扁、拉长和局部编辑均有效，保留原有不对称形态', () => {
+  const sculpt = new SoftSculpt();
+  const height = () => Math.max(...sculpt.shape.map(p => p.y)) - Math.min(...sculpt.shape.map(p => p.y));
+  const originalHeight = height();
+  sculpt.begin({ x: 0, y: -212 }); sculpt.move({ x: 20, y: -168 }); sculpt.release();
+  assert.ok(height() < originalHeight - 15);
+  const flattened = JSON.stringify(sculpt.shape);
+  sculpt.begin(sculpt.shape[0]); sculpt.move({ x: sculpt.shape[0].x - 24, y: sculpt.shape[0].y - 67 }); sculpt.release();
+  assert.ok(height() > originalHeight);
+  assert.notEqual(JSON.stringify(sculpt.shape), flattened);
+  assert.ok(validShape(sculpt.shape));
+});
+
+test('团子塑形：撤销、可撤销的重置和历史上限不会复用可变引用', () => {
+  const sculpt = new SoftSculpt(), original = JSON.stringify(sculpt.shape);
+  sculpt.begin({ x: 111, y: -100 }); sculpt.move({ x: 156, y: -110 }); sculpt.release();
+  const custom = JSON.stringify(sculpt.shape);
+  assert.equal(sculpt.reset(), true); assert.equal(JSON.stringify(sculpt.shape), original);
+  assert.equal(sculpt.undo(), true); assert.equal(JSON.stringify(sculpt.shape), custom);
+  assert.equal(sculpt.undo(), true); assert.equal(JSON.stringify(sculpt.shape), original);
+  assert.equal(sculpt.undo(), false);
+  for (let i = 0; i < 60; i++) sculpt.remember(sculpt.shape);
+  assert.equal(sculpt.history.length, 40);
+  sculpt.shape[0].x += 1;
+  assert.notEqual(sculpt.shape[0].x, sculpt.history[0][0].x);
+});
+
+test('团子塑形：200 次极端拖动不产生自交或尖刺，动画中的眼睛有安全位置', () => {
+  const sculpt = new SoftSculpt();
+  for (let i = 0; i < 200; i++) {
+    const p = sculpt.shape[(i * 7) % 32];
+    sculpt.begin(p); sculpt.move({ x: p.x + Math.sin(i * 3) * 1800, y: p.y + Math.cos(i * 5) * 1800 }); sculpt.release();
+    assert.ok(validShape(sculpt.shape), `invalid at ${i}`);
+    const animated = makeContour(i * .3, samplePose(i * .3), 1, sculpt.shape);
+    assert.ok(safeFace(animated), `face has no safe placement at ${i}`);
+    assert.equal(renderedOutline(animated).length, 96);
+  }
 });

@@ -12,7 +12,7 @@
   </head>
   <body>
     <main>
-      <svg class="scene" viewBox="0 80 640 480" role="img" aria-label="一个只有深色眼睛的纯白软团子，轻轻浮动、摇晃和眨眼">
+      <svg class="scene" viewBox="0 80 640 480" role="img" aria-label="可按住轮廓拖动塑形的纯白软团子，持续浮动、摇晃和眨眼">
         <defs>
           <radialGradient id="floor-softness">
             <stop offset="0" stop-color="#aaa6a0" stop-opacity=".21" />
@@ -32,6 +32,11 @@
           </g>
         </g>
       </svg>
+      <div class="tools" role="group" aria-label="塑形操作">
+        <button id="undo" type="button" disabled title="撤销上一次塑形（Ctrl+Z / ⌘Z）">撤销</button>
+        <span aria-hidden="true"></span>
+        <button id="reset" type="button" disabled title="恢复初始形状，仍可撤销">重置</button>
+      </div>
     </main>
   </body>
 </html>
