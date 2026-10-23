@@ -80,6 +80,20 @@ test('团子塑形：轮廓任意位置可抓取，相邻点柔软跟随，松�
   assert.equal(sculpt.shape.length, 32);
 });
 
+test('回弹中重新抓取：按可见轮廓绑定材料点，仍以已保存形状为编辑基线', () => {
+  const sculpt = new SoftSculpt(), original = JSON.stringify(sculpt.shape);
+  const visible = sculpt.shape.map(p => ({ x: p.x + 90, y: p.y - 15 }));
+  const point = { ...visible[8] };
+  assert.equal(sculpt.hitTest(point), null);
+  const hit = sculpt.hitTest(point, visible);
+  assert.ok(hit); assert.ok(sculpt.begin(point, hit));
+  assert.equal(JSON.stringify(sculpt.shape), original, 'picking an animated edge must not overwrite the saved shape');
+  sculpt.move({ x: point.x + 35, y: point.y - 5 });
+  assert.ok(sculpt.release()); assert.ok(validShape(sculpt.shape));
+  assert.ok(sculpt.shape[8].x > visible[8].x - 70);
+  assert.ok(sculpt.undo()); assert.equal(JSON.stringify(sculpt.shape), original);
+});
+
 test('团子塑形：压扁、拉长和局部编辑均有效，保留原有不对称形态', () => {
   const sculpt = new SoftSculpt();
   const height = () => Math.max(...sculpt.shape.map(p => p.y)) - Math.min(...sculpt.shape.map(p => p.y));

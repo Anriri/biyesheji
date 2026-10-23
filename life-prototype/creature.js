@@ -216,19 +216,19 @@
   }
   class SoftSculpt {
     constructor() { this.shape = clone(REST); this.history = []; this.grab = null; }
-    hitTest(point) {
+    hitTest(point, shape = this.shape) {
       let nearest = { distance: Infinity };
-      this.shape.forEach((a, i) => {
-        const b = this.shape[(i + 1) % this.shape.length];
+      shape.forEach((a, i) => {
+        const b = shape[(i + 1) % shape.length];
         const dx = b.x - a.x, dy = b.y - a.y;
         const t = clamp(((point.x - a.x) * dx + (point.y - a.y) * dy) / (dx * dx + dy * dy || 1), 0, 1);
         const p = { x: a.x + dx * t, y: a.y + dy * t };
         if (distance(point, p) < nearest.distance) nearest = { index: i, t, distance: distance(point, p) };
       });
-      return nearest.distance <= 22 || inside(point, this.shape) ? nearest : null;
+      return nearest.distance <= 22 || inside(point, shape) ? nearest : null;
     }
-    begin(point) {
-      const hit = this.hitTest(point); if (!hit) return false;
+    begin(point, hit = this.hitTest(point)) {
+      if (!hit) return false;
       const arcs = [0];
       for (let i = 0; i < this.shape.length; i++) arcs.push(arcs[i] + distance(this.shape[i], this.shape[(i + 1) % this.shape.length]));
       const total = arcs.at(-1), contact = arcs[hit.index] + (arcs[hit.index + 1] - arcs[hit.index]) * hit.t;
@@ -331,10 +331,11 @@
   }
   const fromLocal = (root, p) => ({ x: root.x + root.nx * p.x + root.tx * p.y, y: root.y + root.ny * p.x + root.ty * p.y });
   const toLocal = (root, p) => ({ x: (p.x - root.x) * root.nx + (p.y - root.y) * root.ny, y: (p.x - root.x) * root.tx + (p.y - root.y) * root.ty });
-  function limbGeometry(limb, shape, pose = limb) {
+  function limbGeometry(limb, shape, pose = limb, parentWidth = null) {
     const root = attachment(shape, limb.slot), tip = fromLocal(root, pose.tip);
     const length = Math.hypot(pose.tip.x, pose.tip.y);
-    const start = fromLocal(root, { x: -limb.width * .8 - 12, y: 0 });
+    const depth = parentWidth === null ? limb.width * .8 + 12 : Math.max(2, Math.min(limb.width * .8 + 12, parentWidth * .55));
+    const start = fromLocal(root, { x: -depth, y: 0 });
     const c1 = fromLocal(root, { x: length * .34, y: 0 });
     const c2 = fromLocal(root, { x: pose.tip.x * .68 + pose.bend.x, y: pose.tip.y * .68 + pose.bend.y });
     const left = [], right = [];
@@ -374,19 +375,45 @@
     }
     const outline = [left[0], ...web(1, left), ...left.slice(7), ...cap, ...right.slice(7).reverse(), ...web(-1, right).reverse(), right[0]];
     const bend = { x: (start.x + 3 * c1.x + 3 * c2.x + tip.x) / 8, y: (start.y + 3 * c1.y + 3 * c2.y + tip.y) / 8 };
-    return { root, tip, bend, outline, path: closedPath(outline) };
+    // Child roots use the very same spline as the visible skin, with outward
+    // normals. The tube contour has the opposite winding to the body contour.
+    const signedArea = outline.reduce((sum, p, i) => { const q = outline[(i + 1) % outline.length]; return sum + p.x * q.y - p.y * q.x; }, 0);
+    const surface = signedArea < 0 ? outline.slice().reverse() : outline;
+    return { root, tip, bend, outline, surface, path: closedPath(outline) };
+  }
+  function limbGeometries(items, shape, poses = new Map()) {
+    const geometries = new Map(), remaining = new Set(items);
+    // Parent-first resolution also supports restored snapshots in any order.
+    while (remaining.size) {
+      let resolved = false;
+      for (const limb of remaining) {
+        const parent = limb.parentId == null ? null : geometries.get(limb.parentId);
+        if (limb.parentId != null && !parent) continue;
+        const parentItem = limb.parentId == null ? null : items.find(item => item.id === limb.parentId);
+        geometries.set(limb.id, limbGeometry(limb, parent ? parent.surface : shape, poses.get(limb.id) || limb, parentItem?.width ?? null));
+        remaining.delete(limb); resolved = true;
+      }
+      if (!resolved) break; // Never hang on an orphaned or cyclic external snapshot.
+    }
+    return geometries;
   }
   class LimbSystem {
     constructor() { this.items = []; this.selected = null; this.grab = null; this.nextId = 1; }
     get active() { return this.items.find(limb => limb.id === this.selected) || null; }
-    beginCreate(point, shape) {
+    surfaceFor(parentId, shape, poses = new Map()) {
+      return parentId == null ? shape : limbGeometries(this.items, shape, poses).get(parentId)?.surface;
+    }
+    beginCreate(point, shape, parentId = null, poses = new Map()) {
+      const surface = this.surfaceFor(parentId, shape, poses);
+      if (!surface) return false;
       let closest = { distance: Infinity };
-      for (let i = 0; i < shape.length * 12; i++) {
-        const slot = i / 12, p = attachment(shape, slot), d = distance(point, p);
+      for (let i = 0; i < surface.length * 12; i++) {
+        const slot = i / 12, p = attachment(surface, slot), d = distance(point, p);
         if (d < closest.distance) closest = { distance: d, slot };
       }
       if (closest.distance > 25) return false;
-      const limb = { id: this.nextId++, slot: closest.slot, tip: { x: 16, y: 0 }, bend: { x: 0, y: 0 }, width: 17 };
+      const parent = this.items.find(item => item.id === parentId);
+      const limb = { id: this.nextId++, parentId, slot: closest.slot, tip: { x: 16, y: 0 }, bend: { x: 0, y: 0 }, width: parent ? clamp(parent.width * .6, 5, 17) : 17 };
       this.items.push(limb); this.selected = limb.id;
       this.grab = { kind: 'create', id: limb.id, before: copyData(limb), origin: { ...point } };
       return true;
@@ -397,9 +424,13 @@
       this.grab = { id, kind, before: copyData(limb), origin: { ...point } };
       return true;
     }
-    move(point, shape) {
+    move(point, shape, poses = new Map()) {
       if (!this.grab || !Number.isFinite(point.x + point.y)) return;
-      const limb = this.active, root = attachment(shape, limb.slot), local = toLocal(root, point);
+      const limb = this.active;
+      if (!limb) return;
+      const surface = this.surfaceFor(limb.parentId, shape, poses);
+      if (!surface) return;
+      const root = attachment(surface, limb.slot), local = toLocal(root, point);
       if (this.grab.kind === 'bend') {
         const origin = toLocal(root, this.grab.origin), max = Math.hypot(limb.tip.x, limb.tip.y) * .65;
         let x = this.grab.before.bend.x + (local.x - origin.x) * 8 / 3;
@@ -423,7 +454,13 @@
     }
     removeSelected() {
       if (!this.active) return false;
-      this.items = this.items.filter(item => item.id !== this.selected); this.selected = null; this.grab = null; return true;
+      const removed = new Set([this.selected]);
+      let previous;
+      do {
+        previous = removed.size;
+        for (const item of this.items) if (removed.has(item.parentId)) removed.add(item.id);
+      } while (previous !== removed.size);
+      this.items = this.items.filter(item => !removed.has(item.id)); this.selected = null; this.grab = null; return true;
     }
     setWidth(value) { if (this.active && Number.isFinite(Number(value))) this.active.width = clamp(Number(value), 5, 42); }
   }
@@ -447,7 +484,7 @@
   }
 
   // Also used by the small, dependency-free numerical regression test.
-  globalThis.CreatureMotion = Object.freeze({ samplePose, makeContour, closedPath, blinkAt, SoftSculpt, validShape, safeFace, renderedOutline, SCULPT_LIMITS, attachment, limbGeometry, LimbSystem, SculptSession });
+  globalThis.CreatureMotion = Object.freeze({ samplePose, makeContour, closedPath, blinkAt, SoftSculpt, validShape, safeFace, renderedOutline, SCULPT_LIMITS, attachment, limbGeometry, limbGeometries, LimbSystem, SculptSession });
   if (typeof document === 'undefined') return;
 
   const body = document.getElementById('body');
@@ -573,7 +610,8 @@
     limbMode.setAttribute('aria-pressed', String(mode === 'limb'));
     widthControl.hidden = deleteButton.hidden = !limbs.active;
     if (limbs.active) widthInput.value = limbs.active.width;
-    hint.textContent = limbs.active ? '圆点调长度与方向 · 中点调弯曲 · 滑动调粗细 · Delete 删除' : mode === 'limb' ? '按住身体边缘向外拖，长出新肢体 · 点击已有肢体可调整' : '拖动身体揉捏 · 切换「长出肢体」可从边缘拉出新肢体';
+    deleteButton.title = '删除选中肢体及其子分支，可撤销';
+    hint.textContent = limbs.active ? `${mode === 'limb' ? '边缘外拉可再分枝' : '切换「长出肢体」可分枝'} · 圆点调长短和弯曲 · 滑块调粗细 · 删除会移除整支` : mode === 'limb' ? '从身体或已有肢体边缘向外拖，继续长出分枝 · 单击肢体可选中' : '拖动身体揉捏 · 切换「长出肢体」可从身体或肢体边缘拉出分枝';
   }
   function svgNode(tag, attributes) {
     const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -612,6 +650,7 @@
     }
   }
   function renderLimbs() {
+    const geometries = limbGeometries(limbs.items, points, limbMotion);
     const ids = new Set(limbs.items.map(item => item.id));
     for (const [id, node] of limbNodes) if (!ids.has(id)) { node.remove(); limbNodes.delete(id); }
     if (!limbs.active && handleLayer.childElementCount) handleLayer.replaceChildren();
@@ -620,7 +659,8 @@
         const node = svgNode('path', { class: 'limb-skin', 'data-limb': limb.id, 'aria-label': `肢体 ${limb.id}` });
         limbLayer.append(node); limbNodes.set(limb.id, node);
       }
-      const geometry = limbGeometry(limb, points, limbMotion.get(limb.id) || limb);
+      const geometry = geometries.get(limb.id);
+      if (!geometry) continue;
       limbNodes.get(limb.id).setAttribute('d', geometry.path);
       if (limbs.selected === limb.id) {
         // Keep the actual controls mounted while animating. Recreating them each
@@ -639,7 +679,7 @@
     }
   }
   function moveDrag(point) {
-    if (drag?.kind === 'body') sculpt.move(point); else limbs.move(point, points);
+    if (drag?.kind === 'body') sculpt.move(point); else limbs.move(point, points, limbMotion);
   }
   function displayPoint(clientX, clientY, pose = livePose) {
     const stage = new DOMPoint(clientX, clientY).matrixTransform(scene.getScreenCTM().inverse());
@@ -668,18 +708,23 @@
     if (target) {
       const id = Number(target.dataset.limb);
       limbs.selected = id;
-      if (!target.dataset.handle) { updateControls(); renderLimbs(); return; }
-      if (!limbs.beginEdit(id, target.dataset.handle, point)) return;
+      if (!target.dataset.handle && mode === 'limb') {
+        if (!limbs.beginCreate(point, points, id, limbMotion)) { updateControls(); return; }
+      } else if (!target.dataset.handle) { updateControls(); renderLimbs(); return; }
+      else if (!limbs.beginEdit(id, target.dataset.handle, point)) return;
       kind = 'limb';
     } else if (mode === 'limb') {
       if (!limbs.beginCreate(point, points)) { limbs.selected = null; updateControls(); return; }
       kind = 'limb';
     } else {
-      if (!sculpt.begin(point)) { limbs.selected = null; updateControls(); return; }
+      // During recoil the visible skin can differ from its saved target. Bind the
+      // visible material edge while preserving the existing sculpt baseline.
+      const hit = sculpt.hitTest(displayPoint(event.clientX, event.clientY), points);
+      if (!hit || !sculpt.begin(point, hit)) { limbs.selected = null; updateControls(); return; }
       limbs.selected = null; kind = 'body';
     }
     event.preventDefault();
-    drag = { kind, before, id: event.pointerId, clientX: event.clientX, clientY: event.clientY, startX: event.clientX, startY: event.clientY, moved: false };
+    drag = { kind, before, restoreSelection: target ? Number(target.dataset.limb) : before.selected, id: event.pointerId, clientX: event.clientX, clientY: event.clientY, startX: event.clientX, startY: event.clientY, moved: false };
     scene.setPointerCapture(event.pointerId); scene.classList.add('is-sculpting'); updateControls();
   });
   scene.addEventListener('pointermove', event => {
@@ -704,7 +749,9 @@
       }
     } else {
       const grab = limbs.grab, limb = limbs.active;
-      if (grab?.kind === 'create' && (!drag.moved || Math.hypot(limb.tip.x, limb.tip.y) < 23)) limbs.removeSelected();
+      if (grab?.kind === 'create' && (!drag.moved || Math.hypot(limb.tip.x, limb.tip.y) < 23)) {
+        limbs.removeSelected(); limbs.selected = drag.restoreSelection;
+      }
       else {
         const changed = limbs.release(), motion = limbMotion.get(limb?.id);
         if (changed && recoil && motion) {

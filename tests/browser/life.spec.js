@@ -366,3 +366,86 @@ test('长肢体：松手有可见回弹，自动留出编辑空间，根部连�
   await page.keyboard.press('Delete'); await expect(page.locator('#limbs path')).toHaveCount(0);
   await page.keyboard.press('Control+z'); await expect(page.locator('#limbs path')).toHaveCount(1);
 });
+
+test('节外生枝：肢体上再长分支，三级连接随父段移动，子树删除和撤销正确', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(entry);
+  await page.getByRole('button', { name: '长出肢体', exact: true }).click();
+  const root = await page.locator('#body').evaluate(p => {
+    let best = p.getPointAtLength(0);
+    for (let i = 1; i < 400; i++) { const q = p.getPointAtLength(p.getTotalLength() * i / 400); if (q.x > best.x) best = q; }
+    const q = new DOMPoint(best.x, best.y).matrixTransform(p.getScreenCTM()); return { x: q.x, y: q.y };
+  });
+  async function pull(from, dx, dy) {
+    await page.mouse.move(from.x, from.y); await page.mouse.down();
+    await expect(page.locator('.scene')).toHaveClass(/is-sculpting/);
+    await page.mouse.move(from.x + dx, from.y + dy, { steps: 24 });
+    await page.mouse.up(); await page.waitForTimeout(1200);
+  }
+  async function edge(id, side) {
+    return page.locator(`#limbs path[data-limb="${id}"]`).evaluate((p, side) => {
+      const b = p.getBBox(), length = p.getTotalLength();
+      const target = side === 'top' ? { x: b.x + b.width * .73, y: b.y } : side === 'right' ? { x: b.x + b.width, y: b.y + b.height * .28 } : { x: b.x + b.width * .75, y: b.y + b.height };
+      let best, bestT, nearest = Infinity;
+      for (let i = 0; i < 600; i++) {
+        const t = length * i / 600, q = p.getPointAtLength(t), d = Math.hypot(q.x - target.x, q.y - target.y);
+        if (d < nearest) { best = q; bestT = t; nearest = d; }
+      }
+      const a = p.getPointAtLength(Math.max(0, bestT - .5)), c = p.getPointAtLength(Math.min(length, bestT + .5));
+      const norm = Math.hypot(c.x - a.x, c.y - a.y) || 1;
+      // Tube contours have negative winding; move two units INTO the skin.
+      const q = new DOMPoint(best.x + (c.y - a.y) / norm * 2, best.y - (c.x - a.x) / norm * 2).matrixTransform(p.getScreenCTM());
+      return { x: q.x, y: q.y };
+    }, side);
+  }
+  await pull(root, 175, 0);
+  const parent = await page.locator('#limbs path').first().getAttribute('data-limb');
+  const select = await edge(parent, 'top');
+  await page.mouse.click(select.x, select.y);
+  await expect(page.locator('#limbs path')).toHaveCount(1);
+  await expect(page.locator('.limb-handle.tip')).toHaveAttribute('data-limb', parent);
+  await pull(await edge(parent, 'top'), 5, -115);
+  await expect(page.locator('#limbs path')).toHaveCount(2);
+  const child = await page.locator('#limbs path').last().getAttribute('data-limb');
+  await pull(await edge(child, 'right'), 85, -10);
+  await expect(page.locator('#limbs path')).toHaveCount(3);
+  const grandchild = await page.locator('#limbs path').last().getAttribute('data-limb');
+  await page.screenshot({ path: 'test-results/life-branches.png' });
+  await page.getByRole('button', { name: '揉捏身体', exact: true }).click();
+  const from = await edge(parent, 'bottom'); await page.mouse.click(from.x, from.y);
+  await expect(page.locator('.limb-handle.tip')).toHaveAttribute('data-limb', parent);
+  const before = await page.locator(`#limbs path[data-limb="${grandchild}"]`).getAttribute('d');
+  const handle = await page.locator('.limb-handle.tip').evaluate(p => {
+    const q = new DOMPoint(+p.getAttribute('cx'), +p.getAttribute('cy')).matrixTransform(p.getScreenCTM()); return { x: q.x, y: q.y };
+  });
+  await pull(handle, 35, 45);
+  await expect(page.locator(`#limbs path[data-limb="${grandchild}"]`)).not.toHaveAttribute('d', before);
+  const connected = await page.evaluate(([parent, child, grandchild]) => {
+    function overlap(a, b) {
+      const p = document.querySelector(`#limbs path[data-limb="${a}"]`), q = document.querySelector(`#limbs path[data-limb="${b}"]`);
+      const x = p.getBBox(), y = q.getBBox();
+      for (let i = Math.max(x.x, y.x); i <= Math.min(x.x + x.width, y.x + y.width); i += 1.5) for (let j = Math.max(x.y, y.y); j <= Math.min(x.y + x.height, y.y + y.height); j += 1.5) {
+        if (p.isPointInFill(new DOMPoint(i, j)) && q.isPointInFill(new DOMPoint(i, j))) return true;
+      }
+      return false;
+    }
+    return overlap(parent, child) && overlap(child, grandchild);
+  }, [parent, child, grandchild]);
+  expect(connected).toBe(true);
+  const childEnd = await page.locator(`#limbs path[data-limb="${child}"]`).evaluate(p => {
+    const t = p.getTotalLength() * .5, a = p.getPointAtLength(t - .5), b = p.getPointAtLength(t + .5), c = p.getPointAtLength(t), d = Math.hypot(b.x - a.x, b.y - a.y);
+    const q = new DOMPoint(c.x + (b.y - a.y) / d * 2, c.y - (b.x - a.x) / d * 2).matrixTransform(p.getScreenCTM()); return { x: q.x, y: q.y };
+  });
+  await page.mouse.click(childEnd.x, childEnd.y);
+  await expect(page.locator('.limb-handle.tip')).toHaveAttribute('data-limb', child);
+  await page.getByRole('button', { name: '删除肢体', exact: true }).click();
+  await expect(page.locator('#limbs path')).toHaveCount(1);
+  await expect(page.locator('#limbs path').first()).toHaveAttribute('data-limb', parent);
+  await page.keyboard.press('Control+z'); await expect(page.locator('#limbs path')).toHaveCount(3);
+  const parentEdge = await edge(parent, 'bottom'); await page.mouse.click(parentEdge.x, parentEdge.y);
+  await expect(page.locator('.limb-handle.tip')).toHaveAttribute('data-limb', parent);
+  await page.getByRole('button', { name: '删除肢体', exact: true }).click(); await expect(page.locator('#limbs path')).toHaveCount(0);
+  await page.keyboard.press('Control+z'); await expect(page.locator('#limbs path')).toHaveCount(3);
+  expect(errors).toEqual([]);
+});
