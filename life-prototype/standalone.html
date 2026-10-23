@@ -221,7 +221,10 @@ main {
       if (fits(candidate)) return candidate;
     }
     const offsets = [];
-    for (let x = -2; x <= 2; x++) for (let y = -2; y <= 2; y++) offsets.push({ x: x * 12, y: y * 12 });
+    const xs = points.map(p => p.x), ys = points.map(p => p.y);
+    const stepX = Math.max(12, (Math.max(...xs) - Math.min(...xs)) * .10);
+    const stepY = Math.max(12, (Math.max(...ys) - Math.min(...ys)) * .09);
+    for (let x = -3; x <= 3; x++) for (let y = -3; y <= 3; y++) offsets.push({ x: x * stepX, y: y * stepY });
     offsets.sort((a, b) => a.x * a.x + a.y * a.y - b.x * b.x - b.y * b.y);
     for (const offset of offsets) {
       const candidate = { x: center.x + offset.x, y: center.y + offset.y };
@@ -232,21 +235,22 @@ main {
   const REST_AREA = area(REST);
   const restEdges = REST.map((p, i) => distance(p, REST[(i + 1) % REST.length]));
   const restPerimeter = restEdges.reduce((a, b) => a + b, 0);
+  const SCULPT_LIMITS = Object.freeze({ travel: 300, width: 620, height: 435, minWidth: 110, minHeight: 88 });
   const cross = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
   function validShape(points) {
-    if (points.length !== REST.length || points.some(p => !Number.isFinite(p.x + p.y) || Math.abs(p.x) > 205 || p.y < -285 || p.y > 28)) return false;
+    if (points.length !== REST.length || points.some(p => !Number.isFinite(p.x + p.y) || Math.abs(p.x) > 365 || p.y < -410 || p.y > 85)) return false;
     const xs = points.map(p => p.x), ys = points.map(p => p.y);
     const width = Math.max(...xs) - Math.min(...xs), height = Math.max(...ys) - Math.min(...ys);
-    if (width < 150 || width > 345 || height < 145 || height > 290) return false;
+    if (width < SCULPT_LIMITS.minWidth || width > SCULPT_LIMITS.width || height < SCULPT_LIMITS.minHeight || height > SCULPT_LIMITS.height) return false;
     const ratio = area(points) / REST_AREA;
-    if (ratio < .65 || ratio > 1.65) return false;
+    if (ratio < .38 || ratio > 2.8) return false;
     let perimeter = 0;
     for (let i = 0; i < points.length; i++) {
       const prev = points[(i + points.length - 1) % points.length], a = points[i], b = points[(i + 1) % points.length];
       const edge = distance(a, b), strain = edge / restEdges[i]; perimeter += edge;
-      if (strain < .55 || strain > 1.9) return false;
+      if (strain < .30 || strain > 3.8) return false;
       const cosine = ((a.x - prev.x) * (b.x - a.x) + (a.y - prev.y) * (b.y - a.y)) / (distance(prev, a) * edge || 1);
-      if (Math.acos(clamp(cosine, -1, 1)) > .72) return false;
+      if (Math.acos(clamp(cosine, -1, 1)) > .86) return false;
       for (let j = i + 2; j < points.length; j++) {
         if (i === 0 && j === points.length - 1) continue;
         const c = points[j], d = points[(j + 1) % points.length];
@@ -254,7 +258,7 @@ main {
       }
     }
     // Reserve extra clearance for breathing, contour recoil and independent gaze motion.
-    return perimeter < restPerimeter * 1.45 && safeFace(points, faceAnchor(points), 5) !== null;
+    return perimeter < restPerimeter * 2.3 && safeFace(points, faceAnchor(points), 3) !== null;
   }
   class SoftSculpt {
     constructor() { this.shape = clone(REST); this.history = []; this.grab = null; }
@@ -274,20 +278,39 @@ main {
       const arcs = [0];
       for (let i = 0; i < this.shape.length; i++) arcs.push(arcs[i] + distance(this.shape[i], this.shape[(i + 1) % this.shape.length]));
       const total = arcs.at(-1), contact = arcs[hit.index] + (arcs[hit.index + 1] - arcs[hit.index]) * hit.t;
-      const weights = arcs.slice(0, -1).map(a => {
+      const materialDistance = arcs.slice(0, -1).map(a => {
         const d = Math.abs(a - contact), arc = Math.min(d, total - d);
-        return Math.exp(-.5 * (arc / 65) ** 2);
+        return arc;
       });
-      this.grab = { origin: { x: point.x, y: point.y }, before: clone(this.shape), weights };
+      const a = this.shape[hit.index], b = this.shape[(hit.index + 1) % this.shape.length];
+      const edge = distance(a, b);
+      const normal = { x: (b.y - a.y) / edge, y: -(b.x - a.x) / edge };
+      const xs = this.shape.map(p => p.x), ys = this.shape.map(p => p.y);
+      const bounds = { width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys), cx: (Math.max(...xs) + Math.min(...xs)) / 2, cy: (Math.max(...ys) + Math.min(...ys)) / 2 };
+      this.grab = { origin: { x: point.x, y: point.y }, before: clone(this.shape), materialDistance, normal, bounds, radius: clamp(total * .12, 82, 120) };
       return true;
     }
     move(point) {
       if (!this.grab || !Number.isFinite(point.x + point.y)) return;
-      const { origin, before, weights } = this.grab;
+      const { origin, before, materialDistance, normal, bounds, radius } = this.grab;
       let dx = point.x - origin.x, dy = point.y - origin.y;
-      const length = Math.hypot(dx, dy), limit = length > 110 ? 110 / length : 1;
+      const length = Math.hypot(dx, dy), limit = length > SCULPT_LIMITS.travel ? SCULPT_LIMITS.travel / length : 1;
       dx *= limit; dy *= limit;
-      const at = t => before.map((p, i) => ({ x: p.x + dx * weights[i] * t, y: p.y + dy * weights[i] * t }));
+      // Long pulls recruit more neighboring material instead of turning a narrow patch
+      // into a spike. All changes are relative to this grab's custom starting shape.
+      const reach = radius + Math.min(Math.hypot(dx, dy) * .20, 58);
+      const weights = materialDistance.map(arc => Math.exp(-.5 * (arc / reach) ** 2));
+      const pressure = Math.max(0, -(dx * normal.x + dy * normal.y));
+      const verticalPress = clamp((Math.abs(normal.y) - .60) / .40, 0, 1);
+      const horizontalPress = clamp((Math.abs(normal.x) - .60) / .40, 0, 1);
+      // Inward pressure lets the dough flow across the other axis: a top press makes
+      // a pancake, while a sideways squeeze makes a taller, narrower form.
+      const spreadX = clamp(pressure / bounds.height, 0, .75) * verticalPress * .65;
+      const spreadY = clamp(pressure / bounds.width, 0, .75) * horizontalPress * .45;
+      const at = t => before.map((p, i) => ({
+        x: p.x + (dx * weights[i] + (p.x - bounds.cx) * spreadX) * t,
+        y: p.y + (dy * weights[i] + (p.y - bounds.cy) * spreadY) * t,
+      }));
       const candidate = at(1);
       if (validShape(candidate)) { this.shape = candidate; return; }
       let low = 0, high = 1, accepted = clone(before);
@@ -320,7 +343,7 @@ main {
   }
 
   // Also used by the small, dependency-free numerical regression test.
-  globalThis.CreatureMotion = Object.freeze({ samplePose, makeContour, closedPath, blinkAt, SoftSculpt, validShape, safeFace, renderedOutline });
+  globalThis.CreatureMotion = Object.freeze({ samplePose, makeContour, closedPath, blinkAt, SoftSculpt, validShape, safeFace, renderedOutline, SCULPT_LIMITS });
   if (typeof document === 'undefined') return;
 
   const body = document.getElementById('body');
@@ -344,6 +367,7 @@ main {
     return seed / 4294967296;
   };
   let time = 0;
+  let recoilUntil = -Infinity;
   let lastFrame = null;
   let frameId;
   let blinkStart = 2.4;
@@ -361,9 +385,10 @@ main {
     for (let step = 0; step < steps; step++) {
       points.forEach((point, i) => {
         // The perimeter lags the center of mass slightly, giving a soft delayed recoil.
-        const stiffness = (sculpt.grab ? 180 : 90) + 9 * Math.sin(i * TAU / points.length);
+        const recoiling = time < recoilUntil;
+        const stiffness = (sculpt.grab ? 360 : recoiling ? 100 : 90) + 9 * Math.sin(i * TAU / points.length);
         for (const axis of ['x', 'y']) {
-          velocities[i][axis] += (stiffness * (target[i][axis] - point[axis]) - (sculpt.grab ? 19 : 13.5) * velocities[i][axis]) * h;
+          velocities[i][axis] += (stiffness * (target[i][axis] - point[axis]) - (sculpt.grab ? 28 : recoiling ? 10.5 : 13.5) * velocities[i][axis]) * h;
           point[axis] += velocities[i][axis] * h;
         }
       });
@@ -451,11 +476,22 @@ main {
     if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 3) drag.moved = true;
     if (drag.moved) sculpt.move(modelPoint(event.clientX, event.clientY));
   });
-  function finishDrag(event) {
+  function finishDrag(event, recoil = true) {
     if (!drag || (event && event.pointerId !== drag.id)) return;
     const id = drag.id;
     if (drag.moved) sculpt.move(modelPoint(drag.clientX, drag.clientY));
-    sculpt.release(); drag = null;
+    const before = sculpt.grab?.before;
+    const changed = sculpt.release();
+    if (changed && recoil && amount > 0) {
+      recoilUntil = time + 1.4;
+      points.forEach((p, i) => {
+        // A small release impulse is tied to material displacement, so even a held,
+        // settled stretch recoils. The saved sculpt target is never moved back.
+        velocities[i].x -= clamp((sculpt.shape[i].x - before[i].x) * 1.15, -165, 165) * amount;
+        velocities[i].y -= clamp((sculpt.shape[i].y - before[i].y) * 1.15, -165, 165) * amount;
+      });
+    }
+    drag = null;
     scene.classList.remove('is-sculpting');
     if (scene.hasPointerCapture(id)) scene.releasePointerCapture(id);
     updateControls();
@@ -463,8 +499,9 @@ main {
   scene.addEventListener('pointerup', finishDrag);
   scene.addEventListener('pointercancel', finishDrag);
   scene.addEventListener('lostpointercapture', finishDrag);
-  function undo() { finishDrag(); sculpt.undo(); updateControls(); }
-  function reset() { finishDrag(); sculpt.reset(); updateControls(); }
+  function softenMomentum() { recoilUntil = -Infinity; velocities.forEach(v => { v.x *= .2; v.y *= .2; }); }
+  function undo() { finishDrag(null, false); sculpt.undo(); softenMomentum(); updateControls(); }
+  function reset() { finishDrag(null, false); sculpt.reset(); softenMomentum(); updateControls(); }
   undoButton.addEventListener('click', undo);
   resetButton.addEventListener('click', reset);
   document.addEventListener('keydown', event => {
@@ -475,7 +512,7 @@ main {
 
   // Pausing the simulation clock avoids a jump or fast-forward after a hidden tab resumes.
   document.addEventListener('visibilitychange', () => {
-    finishDrag();
+    finishDrag(null, false);
     cancelAnimationFrame(frameId);
     lastFrame = null;
     if (!document.hidden) frameId = requestAnimationFrame(frame);

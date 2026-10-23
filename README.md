@@ -4,9 +4,11 @@
 
 ## 当前实验：纯白团子生命感动画与鼠标塑形
 
-**[下载白色团子塑形 ZIP：解压后双击打开，无需安装](https://raw.githubusercontent.com/Anriri/biyesheji/main/downloads/unnamed-creature-life-sculpt.zip)**
+**[下载白色团子增强塑形 ZIP：解压后双击打开，无需安装](https://raw.githubusercontent.com/Anriri/biyesheji/main/downloads/unnamed-creature-life-sculpt-v2.zip)**
 
 沿用纯白软团子和一双深色眼睛，保留自动浮动、摇晃、压扁回弹、轮廓波动、眨眼和视线变化。现在可直接按住轮廓拖动塑形，松手后保留新形状，眼睛跟随并保持在身体内。底部增加撤销、重置，支持 Ctrl+Z / ⌘Z；不需要摄像头。
+
+增强版将最大拉伸提高到原来的约 2–3 倍，支持明显的局部突出、从上往下压扁与横向摊开，并增强松手回弹。所有操作可以叠加，待机动画不会覆盖塑形结果。
 
 源码位于 [life-prototype](life-prototype/README.md)，单文件入口为 [standalone.html](life-prototype/standalone.html)。下载包里双击 **`打开动画.html`**。下面保留旧版塑形实验的说明。
 

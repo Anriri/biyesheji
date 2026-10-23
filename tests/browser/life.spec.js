@@ -106,3 +106,58 @@ test('鼠标实时拉伸并保留形状，眼睛始终在身体内，撤销与�
   await expect(page.locator('#body')).not.toHaveAttribute('d', before);
   await page.screenshot({ path: 'test-results/life-sculpted.png' });
 });
+
+test('增强塑形：大幅局部拉伸实时可见，保持后松手仍会回弹并保留', async ({ page }) => {
+  await page.goto(entry);
+  const initial = await page.locator('#body').evaluate(p => p.getBBox().width);
+  const from = await page.locator('#body').evaluate(p => {
+    const b = p.getBBox(), q = new DOMPoint(b.x + b.width * .98, b.y + b.height * .55).matrixTransform(p.getScreenCTM());
+    return { x: q.x, y: q.y };
+  });
+  await page.mouse.move(from.x, from.y); await page.mouse.down();
+  await page.mouse.move(from.x + 300, from.y - 6, { steps: 30 });
+  await expect.poll(() => page.locator('#body').evaluate(p => p.getBBox().width)).toBeGreaterThan(initial + 160);
+  await page.waitForTimeout(750); // Let the held shape settle: release must still recoil.
+  await page.mouse.up();
+  const samples = await page.evaluate(() => new Promise(resolve => {
+    const start = performance.now(), result = [];
+    function sample(now) {
+      const body = document.getElementById('body');
+      for (const eye of document.querySelectorAll('#eyes ellipse')) for (let i = 0; i < 12; i++) {
+        const angle = i * Math.PI / 6;
+        const point = new DOMPoint(Number(eye.getAttribute('cx')) + Number(eye.getAttribute('rx')) * Math.cos(angle), Number(eye.getAttribute('cy')) + Number(eye.getAttribute('ry')) * Math.sin(angle));
+        if (!body.isPointInFill(point)) return resolve({ outside: true });
+      }
+      result.push({ t: now - start, width: body.getBBox().width });
+      if (now - start < 1200) requestAnimationFrame(sample); else resolve({ result });
+    }
+    requestAnimationFrame(sample);
+  }));
+  expect(samples.outside).not.toBe(true);
+  const values = samples.result, first = values[0], last = values.at(-1);
+  const recoil = values.map(v => v.width - (first.width + (last.width - first.width) * (v.t - first.t) / (last.t - first.t)));
+  // Remove slow breathing drift; the remaining non-linear release motion must be visible.
+  expect(Math.max(...recoil) - Math.min(...recoil)).toBeGreaterThan(5);
+  expect(last.width).toBeGreaterThan(initial + 150);
+  await expect(page.getByRole('button', { name: '撤销', exact: true })).toBeEnabled();
+  await page.screenshot({ path: 'test-results/life-large-stretch.png' });
+});
+
+test('增强塑形：从顶部明显压扁且横向摊开，动画持续运行', async ({ page }) => {
+  await page.goto(entry);
+  const initial = await page.locator('#body').evaluate(p => {
+    const b = p.getBBox(), q = new DOMPoint(b.x + b.width * .5, b.y + 2).matrixTransform(p.getScreenCTM());
+    return { width: b.width, height: b.height, x: q.x, y: q.y };
+  });
+  await page.mouse.move(initial.x, initial.y); await page.mouse.down();
+  await page.mouse.move(initial.x, initial.y + 180, { steps: 30 }); await page.mouse.up();
+  await expect.poll(() => page.locator('#body').evaluate(p => p.getBBox().height)).toBeLessThan(initial.height * .58);
+  await page.waitForTimeout(1500);
+  const flat = await page.locator('#body').evaluate(p => ({ width: p.getBBox().width, height: p.getBBox().height }));
+  expect(flat.width).toBeGreaterThan(initial.width + 35);
+  expect(flat.height).toBeLessThan(initial.height * .58);
+  expect(flat.width / flat.height).toBeGreaterThan(2.7);
+  const path = await page.locator('#body').getAttribute('d');
+  await expect(page.locator('#body')).not.toHaveAttribute('d', path);
+  await page.screenshot({ path: 'test-results/life-pancake.png' });
+});

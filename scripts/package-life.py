@@ -22,7 +22,9 @@ with ZipFile(destination, 'w', ZIP_DEFLATED) as archive:
         '全部解压后，双击“打开动画.html”。\n'
         '不需要安装、不需要命令、不需要联网、不需要摄像头。\n'
         '动画自动播放，白色团子保留浮动、摇晃、眨眼。\n'
-        '鼠标按住轮廓拖动，可局部拉长、压扁；松开轻微回弹并定型。\n'
+        '增强塑形：鼠标按住轮廓向外拉，可明显拉长；顶部下压可压扁并摊宽。\n'
+        '每次局部修改可以叠加，最大拉伸约为旧版的 2—3 倍。\n'
+        '松开后会有自然的 Q 弹晃动，最后保留塑形结果，不会恢复原状。\n'
         '点击撤销或按 Ctrl+Z 回退，点击重置恢复初始形状。重置也能撤销。\n'
         '推荐 Chrome、Edge、Firefox 或 Safari。\n'
         'source 文件夹包含可编辑的 HTML、CSS、JavaScript 与说明。\n'
@@ -32,4 +34,5 @@ with ZipFile(destination, 'w', ZIP_DEFLATED) as archive:
 with ZipFile(destination) as archive:
     assert archive.testzip() is None
 copyfile(destination, destination.with_name('unnamed-creature-life-sculpt.zip'))
+copyfile(destination, destination.with_name('unnamed-creature-life-sculpt-v2.zip'))
 print(f'Standalone HTML and ZIP prepared: {destination} ({destination.stat().st_size:,} bytes)')

@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const context = {};
 vm.runInNewContext(readFileSync(new URL('../life-prototype/creature.js', import.meta.url), 'utf8'), context);
 const { samplePose, makeContour, closedPath, blinkAt } = context.CreatureMotion;
-const { SoftSculpt, validShape, safeFace, renderedOutline } = context.CreatureMotion;
+const { SoftSculpt, validShape, safeFace, renderedOutline, SCULPT_LIMITS } = context.CreatureMotion;
 const area = points => Math.abs(points.reduce((sum, p, i) => {
   const q = points[(i + 1) % points.length];
   return sum + p.x * q.y - p.y * q.x;
@@ -116,4 +116,54 @@ test('团子塑形：200 次极端拖动不产生自交或尖刺，动画中的�
     assert.ok(safeFace(animated), `face has no safe placement at ${i}`);
     assert.equal(renderedOutline(animated).length, 96);
   }
+});
+
+test('增强塑形：同样大幅拖动的真实材料位移为旧版的 2–3 倍', () => {
+  // Measured before this change: same untouched rest shape, same pointer paths.
+  const cases = [
+    [{ x: 111, y: -100 }, { x: 411, y: -100 }, 96.06281588206741],
+    [{ x: 0, y: -212 }, { x: 0, y: -512 }, 67.11932754867507],
+  ];
+  for (const [from, to, previousDisplacement] of cases) {
+    const sculpt = new SoftSculpt(), before = sculpt.shape.map(p => ({ ...p }));
+    sculpt.begin(from); sculpt.move(to); sculpt.release();
+    const displacement = Math.max(...sculpt.shape.map((p, i) => Math.hypot(p.x - before[i].x, p.y - before[i].y)));
+    assert.ok(displacement > previousDisplacement * 2.5);
+    assert.ok(displacement < previousDisplacement * 3);
+    assert.ok(validShape(sculpt.shape));
+    const near = 8, far = 24;
+    if (from.x > 0) assert.ok(Math.hypot(sculpt.shape[near].x - before[near].x, sculpt.shape[near].y - before[near].y) > 4 * Math.hypot(sculpt.shape[far].x - before[far].x, sculpt.shape[far].y - before[far].y), 'must be local deformation, not whole-character scale');
+  }
+  assert.equal(SCULPT_LIMITS.travel, 300);
+});
+
+test('增强塑形：从上往下压成明显扁宽形态，横向拉宽和纵向拉长有效', () => {
+  function dimensions(points) {
+    return { w: Math.max(...points.map(p => p.x)) - Math.min(...points.map(p => p.x)), h: Math.max(...points.map(p => p.y)) - Math.min(...points.map(p => p.y)) };
+  }
+  const pancake = new SoftSculpt(), original = dimensions(pancake.shape);
+  pancake.begin({ x: 0, y: -212 }); pancake.move({ x: 0, y: -62 }); pancake.release();
+  const flat = dimensions(pancake.shape);
+  assert.ok(flat.h < original.h * .46);
+  assert.ok(flat.w > original.w * 1.25);
+  assert.ok(flat.w / flat.h > 3);
+  assert.ok(safeFace(pancake.shape));
+  const wide = new SoftSculpt(); wide.begin({ x: 111, y: -100 }); wide.move({ x: 380, y: -100 }); wide.release();
+  assert.ok(dimensions(wide.shape).w > original.w * 1.9);
+  const tall = new SoftSculpt(); tall.begin({ x: 0, y: -212 }); tall.move({ x: 0, y: -480 }); tall.release();
+  assert.ok(dimensions(tall.shape).h > original.h * 1.8);
+});
+
+test('增强塑形：不同位置的大幅编辑叠加，撤销精确恢复已有自定义轮廓', () => {
+  const sculpt = new SoftSculpt();
+  sculpt.begin({ x: 111, y: -100 }); sculpt.move({ x: 320, y: -100 }); sculpt.release();
+  const first = JSON.stringify(sculpt.shape);
+  const rightMax = Math.max(...sculpt.shape.map(p => p.x));
+  const left = sculpt.shape.reduce((a, b) => a.x < b.x ? a : b);
+  sculpt.begin(left); sculpt.move({ x: left.x - 140, y: left.y + 30 }); sculpt.release();
+  assert.notEqual(JSON.stringify(sculpt.shape), first);
+  assert.ok(Math.max(...sculpt.shape.map(p => p.x)) > rightMax - 45);
+  assert.ok(Math.min(...sculpt.shape.map(p => p.x)) < -170);
+  assert.ok(validShape(sculpt.shape));
+  assert.ok(sculpt.undo()); assert.equal(JSON.stringify(sculpt.shape), first);
 });
