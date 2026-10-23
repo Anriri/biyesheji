@@ -161,3 +161,50 @@ test('增强塑形：从顶部明显压扁且横向摊开，动画持续运行',
   await expect(page.locator('#body')).not.toHaveAttribute('d', path);
   await page.screenshot({ path: 'test-results/life-pancake.png' });
 });
+
+test('连续鼠标塑形：先向两边拉宽，再抓顶部向上拉，保留宽度且可单独撤销', async ({ page }) => {
+  await page.goto(entry);
+  async function edge(which) {
+    return page.locator('#body').evaluate((path, side) => {
+      const length = path.getTotalLength();
+      let best = path.getPointAtLength(0);
+      for (let i = 1; i < 320; i++) {
+        const p = path.getPointAtLength(length * i / 320);
+        if ((side === 'top' && p.y < best.y) || (side === 'left' && p.x < best.x) || (side === 'right' && p.x > best.x)) best = p;
+      }
+      const point = new DOMPoint(best.x, best.y + (side === 'top' ? 2 : 0)).matrixTransform(path.getScreenCTM());
+      return { x: point.x, y: point.y };
+    }, which);
+  }
+  async function pull(which, dx, dy) {
+    const from = await edge(which);
+    await page.mouse.move(from.x, from.y); await page.mouse.down();
+    await expect(page.locator('.scene')).toHaveClass(/is-sculpting/);
+    await page.mouse.move(from.x + dx, from.y + dy, { steps: 30 });
+    await page.waitForTimeout(350);
+    await page.mouse.up();
+    await page.waitForTimeout(1600);
+  }
+  const dimensions = () => page.locator('#body').evaluate(p => ({ width: p.getBBox().width, height: p.getBBox().height }));
+  await pull('right', 310, 0);
+  await pull('left', -260, 0);
+  const wide = await dimensions();
+  expect(wide.width).toBeGreaterThan(560);
+  await page.screenshot({ path: 'test-results/life-wide-before-up.png' });
+  await pull('top', 20, -170);
+  const tall = await dimensions();
+  expect(tall.height).toBeGreaterThan(wide.height + 100);
+  expect(tall.width).toBeGreaterThan(wide.width - 55);
+  const inside = await page.evaluate(() => {
+    const body = document.getElementById('body');
+    return [...document.querySelectorAll('#eyes ellipse')].every(eye => Array.from({ length: 16 }, (_, i) => {
+      const t = i * Math.PI / 8;
+      return body.isPointInFill(new DOMPoint(+eye.getAttribute('cx') + +eye.getAttribute('rx') * Math.cos(t), +eye.getAttribute('cy') + +eye.getAttribute('ry') * Math.sin(t)));
+    }).every(Boolean));
+  });
+  expect(inside).toBe(true);
+  await page.screenshot({ path: 'test-results/life-wide-then-up.png' });
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => (await dimensions()).height).toBeLessThan(wide.height + 25);
+  expect((await dimensions()).width).toBeGreaterThan(wide.width - 55);
+});

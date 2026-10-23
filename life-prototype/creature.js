@@ -126,7 +126,6 @@
   }
   const REST_AREA = area(REST);
   const restEdges = REST.map((p, i) => distance(p, REST[(i + 1) % REST.length]));
-  const restPerimeter = restEdges.reduce((a, b) => a + b, 0);
   const SCULPT_LIMITS = Object.freeze({ travel: 300, width: 620, height: 435, minWidth: 110, minHeight: 88 });
   const cross = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
   function validShape(points) {
@@ -135,7 +134,9 @@
     const width = Math.max(...xs) - Math.min(...xs), height = Math.max(...ys) - Math.min(...ys);
     if (width < SCULPT_LIMITS.minWidth || width > SCULPT_LIMITS.width || height < SCULPT_LIMITS.minHeight || height > SCULPT_LIMITS.height) return false;
     const ratio = area(points) / REST_AREA;
-    if (ratio < .38 || ratio > 2.8) return false;
+    // Size is bounded per axis, not by a shared area budget. A wide custom shape
+    // still needs room to grow upwards without undoing its previous sculpting.
+    if (ratio < .38) return false;
     let perimeter = 0;
     for (let i = 0; i < points.length; i++) {
       const prev = points[(i + points.length - 1) % points.length], a = points[i], b = points[(i + 1) % points.length];
@@ -150,7 +151,36 @@
       }
     }
     // Reserve extra clearance for breathing, contour recoil and independent gaze motion.
-    return perimeter < restPerimeter * 2.3 && safeFace(points, faceAnchor(points), 3) !== null;
+    return perimeter < 2 * (width + height) * 1.15 && safeFace(points, faceAnchor(points), 3) !== null;
+  }
+
+  function axisTravel(before, changes, axis, low, high, maxSpan, minSpan) {
+    // Project only the blocked component of a pull. At the right/width boundary,
+    // a tiny horizontal pointer drift must not cancel a valid vertical edit.
+    let fraction = 1;
+    before.forEach((p, i) => {
+      const delta = changes[i][axis];
+      if (delta > 0) fraction = Math.min(fraction, (high - p[axis]) / delta);
+      if (delta < 0) fraction = Math.min(fraction, (low - p[axis]) / delta);
+      before.forEach((q, j) => {
+        const relative = delta - changes[j][axis];
+        if (relative > 0) fraction = Math.min(fraction, (maxSpan - p[axis] + q[axis]) / relative);
+      });
+    });
+    fraction = clamp(fraction, 0, 1);
+    const span = t => {
+      const values = before.map((p, i) => p[axis] + changes[i][axis] * t);
+      return Math.max(...values) - Math.min(...values);
+    };
+    if (span(fraction) < minSpan) {
+      let a = 0, b = fraction;
+      for (let i = 0; i < 12; i++) {
+        const mid = (a + b) / 2;
+        if (span(mid) >= minSpan) a = mid; else b = mid;
+      }
+      fraction = a;
+    }
+    return fraction;
   }
   class SoftSculpt {
     constructor() { this.shape = clone(REST); this.history = []; this.grab = null; }
@@ -199,9 +229,15 @@
       // a pancake, while a sideways squeeze makes a taller, narrower form.
       const spreadX = clamp(pressure / bounds.height, 0, .75) * verticalPress * .65;
       const spreadY = clamp(pressure / bounds.width, 0, .75) * horizontalPress * .45;
+      const changes = before.map((p, i) => ({
+        x: dx * weights[i] + (p.x - bounds.cx) * spreadX,
+        y: dy * weights[i] + (p.y - bounds.cy) * spreadY,
+      }));
+      const tx = axisTravel(before, changes, 'x', -365, 365, SCULPT_LIMITS.width, SCULPT_LIMITS.minWidth);
+      const ty = axisTravel(before, changes, 'y', -410, 85, SCULPT_LIMITS.height, SCULPT_LIMITS.minHeight);
       const at = t => before.map((p, i) => ({
-        x: p.x + (dx * weights[i] + (p.x - bounds.cx) * spreadX) * t,
-        y: p.y + (dy * weights[i] + (p.y - bounds.cy) * spreadY) * t,
+        x: p.x + changes[i].x * tx * t,
+        y: p.y + changes[i].y * ty * t,
       }));
       const candidate = at(1);
       if (validShape(candidate)) { this.shape = candidate; return; }

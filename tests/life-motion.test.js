@@ -167,3 +167,39 @@ test('增强塑形：不同位置的大幅编辑叠加，撤销精确恢复已�
   assert.ok(validShape(sculpt.shape));
   assert.ok(sculpt.undo()); assert.equal(JSON.stringify(sculpt.shape), first);
 });
+
+test('连续塑形：拉宽到横向上限后仍能向上拉，不消耗共享面积额度', () => {
+  const sculpt = new SoftSculpt();
+  sculpt.begin({ x: 111, y: -100 }); sculpt.move({ x: 411, y: -100 }); sculpt.release();
+  const left = sculpt.shape.reduce((a, b) => a.x < b.x ? a : b);
+  sculpt.begin(left); sculpt.move({ x: left.x - 200, y: left.y }); sculpt.release();
+  const wide = JSON.stringify(sculpt.shape), wideArea = area(sculpt.shape);
+  const width = () => Math.max(...sculpt.shape.map(p => p.x)) - Math.min(...sculpt.shape.map(p => p.x));
+  const top = sculpt.shape.reduce((a, b) => a.y < b.y ? a : b);
+  assert.ok(width() > SCULPT_LIMITS.width - 1);
+  sculpt.begin(top);
+  // Deliberate sideways drift at an already saturated width must not block y.
+  sculpt.move({ x: top.x + 35, y: top.y - 140 });
+  assert.ok(Math.min(...sculpt.shape.map(p => p.y)) < top.y - 110);
+  assert.ok(width() > SCULPT_LIMITS.width - 20);
+  assert.ok(area(sculpt.shape) > wideArea * 1.25);
+  assert.ok(validShape(sculpt.shape));
+  assert.ok(sculpt.release());
+  const custom = JSON.stringify(sculpt.shape);
+  for (let t = 0; t < 12; t += .1) assert.ok(safeFace(makeContour(t, samplePose(t), 1, sculpt.shape)));
+  assert.equal(JSON.stringify(sculpt.shape), custom);
+  assert.ok(sculpt.undo()); assert.equal(JSON.stringify(sculpt.shape), wide);
+});
+
+test('连续塑形：压到最低高度后仍能横拉，之后可再向上拉回高形态', () => {
+  const sculpt = new SoftSculpt();
+  sculpt.begin({ x: 0, y: -212 }); sculpt.move({ x: 0, y: -62 }); sculpt.release();
+  const right = sculpt.shape.reduce((a, b) => a.x > b.x ? a : b);
+  const initialRight = right.x;
+  sculpt.begin(right); sculpt.move({ x: right.x + 100, y: right.y + 10 }); sculpt.release();
+  assert.ok(Math.max(...sculpt.shape.map(p => p.x)) > initialRight + 60);
+  const top = sculpt.shape.reduce((a, b) => a.y < b.y ? a : b);
+  sculpt.begin(top); sculpt.move({ x: top.x, y: top.y - 140 }); sculpt.release();
+  assert.ok(Math.min(...sculpt.shape.map(p => p.y)) < top.y - 100);
+  assert.ok(validShape(sculpt.shape));
+});
