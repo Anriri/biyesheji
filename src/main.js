@@ -1,5 +1,5 @@
 import './style.css';
-import { Sculpture, WIDTH, HEIGHT, closedCurve, skinPoint, clamp } from './sculpture.js';
+import { Sculpture, WIDTH, HEIGHT, closedCurve, skinPoint, facePose, clamp } from './sculpture.js';
 import { GestureFilter } from './gesture.js';
 import { CameraTracker, CONNECTIONS } from './tracking.js';
 
@@ -39,7 +39,7 @@ document.querySelector('#app').innerHTML = `
           <span class="stage-corner corner-tl"></span><span class="stage-corner corner-tr"></span><span class="stage-corner corner-bl"></span><span class="stage-corner corner-br"></span>
           <div class="specimen-label"><span>NO. 002</span><h2>弥弥 <small>MIMI</small></h2><p>未分类 · 月光软体科</p></div>
           <div class="stage-tip" id="stage-tip">${icon('hand')} 打开摄像头，和弥弥打个招呼</div>
-          <svg id="creature-stage" viewBox="0 0 ${WIDTH} ${HEIGHT}" role="img" aria-label="可通过真实手势拉伸耳朵和身体的珠光淡紫软体生物弥弥，可从整个轮廓捏出多根触须">
+          <svg id="creature-stage" viewBox="0 0 ${WIDTH} ${HEIGHT}" role="img" aria-label="可通过真实手势或鼠标调整耳朵、主体和四肢比例的珠光淡紫软体生物弥弥">
             <defs>
               <radialGradient id="pearl-skin" cx=".36" cy=".22" r=".88"><stop stop-color="#fff5ef"/><stop offset=".25" stop-color="#e9dfea"/><stop offset=".60" stop-color="#c8b5d9"/><stop offset=".84" stop-color="#ac95c1"/><stop offset="1" stop-color="#8b749f"/></radialGradient>
               <radialGradient id="eye-gem" cx=".37" cy=".26" r=".8"><stop stop-color="#60506d"/><stop offset=".45" stop-color="#39293f"/><stop offset=".78" stop-color="#543650"/><stop offset="1" stop-color="#bb8b9b"/></radialGradient>
@@ -73,12 +73,13 @@ document.querySelector('#app').innerHTML = `
             <path id="contour-guide" fill="none" stroke="#aa92bd" stroke-width="1" stroke-dasharray="2 7" opacity=".38"/>
             <circle id="surface-target" r="14" fill="#edc9b2" fill-opacity=".15" stroke="#b29ac5" stroke-width="1.4" stroke-dasharray="3 4" opacity="0"/>
             <g id="hand-cursor" opacity="0"><circle class="cursor-halo" r="34" fill="#d9bfe4" fill-opacity=".2"/><circle id="cursor-ring" r="21" fill="none" stroke="#9274a6" stroke-width="2.4"/><circle r="4" fill="#9274a6"/><path id="cursor-pinch" d="m-6 1 4 4 9-10" stroke="#9274a6" stroke-width="2.5" fill="none" opacity="0"/><text id="cursor-label" x="0" y="-42" text-anchor="middle" fill="#79628b" font-size="17" font-family="sans-serif">任意位置都能捏</text></g>
-            <g class="ear-hint"><path d="M249 345Q258 302 308 303" fill="none" stroke="#b4a3bc" stroke-width="1.3" stroke-dasharray="4 5"/><text x="171" y="371" fill="#a18bad" font-size="16" font-family="sans-serif" transform="rotate(-8 171 371)">从这里，长出新的可能</text></g>
+            <g class="ear-hint"><path d="M249 345Q258 302 308 303" fill="none" stroke="#b4a3bc" stroke-width="1.3" stroke-dasharray="4 5"/><text x="171" y="371" fill="#a18bad" font-size="16" font-family="sans-serif" transform="rotate(-8 171 371)">软乎乎，也有小小的边界</text></g>
           </svg>
           <div class="stage-bottom"><span><i></i> <span id="mood-text">今天也有无限可能</span></span><span class="mono" id="edit-counter">00 次塑形</span></div>
           <div class="toast" id="toast" role="status"></div>
         </div>
-        <div class="sculpt-toolbar"><span>自由生长 <small>整个轮廓都可塑形</small></span><label for="brush-size">拉伸粗细</label><input id="brush-size" type="range" min="16" max="90" value="32"/><output id="brush-label" for="brush-size">纤细触须</output></div>
+        <div class="sculpt-toolbar"><span>柔软塑形 <small>耳朵 · 主体 · 四肢</small></span><label for="brush-size">柔软范围</label><input id="brush-size" type="range" min="45" max="110" value="76"/><output id="brush-label" for="brush-size">适中</output></div>
+        <div class="sculpt-tools"><div class="input-modes" role="group" aria-label="塑形操作方式"><button id="gesture-mode" aria-pressed="true">隔空手势</button><button id="mouse-mode" aria-pressed="false">鼠标塑形</button></div><div class="palette" role="group" aria-label="生物涂色"><span>涂色</span><button class="color-swatch" data-color="#c8b5d9" aria-label="淡紫色" style="--swatch:#c8b5d9"></button><button class="color-swatch" data-color="#b6d5c0" aria-label="薄荷色" style="--swatch:#b6d5c0"></button><button class="color-swatch" data-color="#efc4b2" aria-label="蜜桃色" style="--swatch:#efc4b2"></button><label class="custom-color" title="自选颜色"><span>自选</span><input id="skin-color" type="color" value="#c8b5d9" aria-label="自选生物颜色"/></label></div></div>
         <div class="lab-footer"><div><span class="live-dot" id="live-dot"></span><span id="tracking-status" role="status" aria-live="polite">摄像头未开启</span></div><div class="shape-actions"><button id="undo-button" disabled>${icon('reset')} 撤销一步</button><button id="reset-button">${icon('reset')} 重置形态</button></div></div>
       </section>
 
@@ -100,8 +101,8 @@ document.querySelector('#app').innerHTML = `
     <footer class="site-footer"><span>未名生物收容所 <i>© 2026</i></span><p>没有标准答案的形状，只有独一无二的你。</p><span class="mono">MADE OF A LITTLE IMAGINATION ${icon('arrow')}</span></footer>
   </main>
 
-  <dialog id="guide-dialog"><button class="dialog-close icon-button" aria-label="关闭指南">${icon('close')}</button><span class="eyebrow">A SMALL FIELD GUIDE</span><h2>让我们隔空认识一下。</h2><p>在 Chrome 或 Edge 中开启摄像头，让一只手完整入镜。镜像画面中向右移动，观察室里的光标也会向右移动。</p><ol><li><strong>找位置：</strong>看着观察室的圆形光标，移动到整个轮廓。光标显示“可以捏住”时即可抓取。</li><li><strong>捏合拉伸：</strong>拇指与食指靠拢并保持，缓慢移动。可拉长耳朵、拉宽身体；从不同位置反复拉出触须，再抓住已有触须继续塑形或分叉。用“拉伸粗细”调节局部影响范围。</li><li><strong>松手定型：</strong>分开两指，弥弥轻轻回弹后保留新形状。每次抓取都需要先张开，再捏合。</li></ol><p class="dialog-note">距离镜头约 40–80 cm、光线均匀，避免两根手指互相遮挡。若捏合难识别，可稍微提高灵敏度。手部丢失超过 350 ms 会自动松手定型。按 Esc 可随时结束当前抓取。</p><button class="primary-button dialog-done">明白了，开始创造 ${icon('arrow')}</button></dialog>
-  <dialog id="archive-dialog"><button class="dialog-close icon-button" aria-label="关闭物种档案">${icon('close')}</button><span class="eyebrow">SPECIMEN ARCHIVE / 002</span><h2>弥弥，还没有被定义。</h2><p>月光软体科的新住客。珠光的皮肤收藏着月亮的颜色，下垂的花瓣耳朵感受每一次靠近。没有固定的四肢数量，也没有必须长成的样子。</p><img class="concept-image" src="${import.meta.env.BASE_URL}concept-mimi.png" alt="弥弥的原创形象设定与多触须形态参考"/><dl class="specimen-facts"><div><dt>初始形态</dt><dd>珠光淡紫 · 星点眼睛 · 花瓣垂耳</dd></div><div><dt>可塑区域</dt><dd>整个连续轮廓 / 自由触须 / 触须分叉</dd></div><div><dt>当前塑形次数</dt><dd id="archive-count">0 次</dd></div><div><dt>档案状态</dt><dd>本次会话中持续生长，刷新后回到初始形态</dd></div></dl><p class="dialog-note">这是「未名生物收容所」毕业设计的交互可行性原型。真正的独一无二，从你伸出手的那一刻开始。</p><button class="primary-button dialog-done">回到观察室 ${icon('arrow')}</button></dialog>
+  <dialog id="guide-dialog"><button class="dialog-close icon-button" aria-label="关闭指南">${icon('close')}</button><span class="eyebrow">A SMALL FIELD GUIDE</span><h2>让我们隔空认识一下。</h2><p>在 Chrome 或 Edge 中开启摄像头，让一只手完整入镜。镜像画面中向右移动，观察室里的光标也会向右移动。</p><ol><li><strong>找位置：</strong>看着观察室的圆形光标，移动到整个轮廓。光标显示“可以捏住”时即可抓取。</li><li><strong>捏合拉伸：</strong>拇指与食指靠拢并保持，缓慢移动。可拉长、缩短或加宽耳朵，也可把身体捏胖、捏瘦或压扁。五官和四肢会保持完整，达到柔软边界时形变会逐渐受限。用“柔软范围”调节操作手感。</li><li><strong>松手定型：</strong>分开两指，弥弥轻轻回弹后保留新形状。每次抓取都需要先张开，再捏合。</li></ol><p class="dialog-note">距离镜头约 40–80 cm、光线均匀，避免两根手指互相遮挡。若捏合难识别，可稍微提高灵敏度。手部丢失超过 350 ms 会自动松手定型。按 Esc 可随时结束当前抓取。</p><button class="primary-button dialog-done">明白了，开始创造 ${icon('arrow')}</button></dialog>
+  <dialog id="archive-dialog"><button class="dialog-close icon-button" aria-label="关闭物种档案">${icon('close')}</button><span class="eyebrow">SPECIMEN ARCHIVE / 002</span><h2>弥弥，还没有被定义。</h2><p>月光软体科的新住客。珠光的皮肤收藏着月亮的颜色，下垂的花瓣耳朵感受每一次靠近。耳朵、主体和四肢都有柔软的活动范围，每一种独特比例都能留下。</p><img class="concept-image" src="${import.meta.env.BASE_URL}concept-mimi.png" alt="弥弥的初始形象设定图，交互造型以当前有边界的塑形为准"/><dl class="specimen-facts"><div><dt>初始形态</dt><dd>珠光淡紫 · 星点眼睛 · 花瓣垂耳</dd></div><div><dt>可塑区域</dt><dd>耳朵长度与宽度 / 主体比例 / 圆润四肢</dd></div><div><dt>当前塑形次数</dt><dd id="archive-count">0 次</dd></div><div><dt>档案状态</dt><dd>本次会话中持续生长，刷新后回到初始形态</dd></div></dl><p class="dialog-note">这是「未名生物收容所」毕业设计的交互可行性原型。真正的独一无二，从你伸出手的那一刻开始。</p><button class="primary-button dialog-done">回到观察室 ${icon('arrow')}</button></dialog>
 `;
 
 const $ = (id) => document.getElementById(id);
@@ -111,6 +112,8 @@ const video = $('camera-video');
 const overlay = $('tracking-overlay');
 const context = overlay.getContext('2d');
 let cameraState = 'off';
+let inputMode = 'gesture';
+let mousePointer = null;
 let lastSeen = 0;
 let cursor = null;
 let currentGesture = null;
@@ -143,6 +146,7 @@ function release(notify = true) {
 function clearHand() {
   release(false);
   gestures.reset();
+  mousePointer = null;
   cursor = null;
   currentGesture = null;
   hover = null;
@@ -177,17 +181,18 @@ function setCameraState(state) {
 
 function updateStatus() {
   const active = cameraState === 'active';
-  const tracking = active && cursor !== null;
-  const pinched = tracking && currentGesture?.pinched;
+  const mouse = inputMode === 'mouse';
+  const tracking = mouse ? cursor !== null : active && cursor !== null;
+  const pinched = mouse ? mousePointer !== null : tracking && currentGesture?.pinched;
   const sculpting = !!sculpture.grab;
-  const title = sculpting ? '正在塑形' : pinched ? '已捏合' : '等待手势';
+  const title = sculpting ? (mouse ? '鼠标塑形' : '正在塑形') : mouse ? '鼠标就绪' : pinched ? '已捏合' : '等待手势';
   $('stage-state').textContent = title;
   $('stage-state').classList.toggle('sculpting', sculpting);
   $('gesture-title').textContent = title;
   $('gesture-symbol').classList.toggle('engaged', !!pinched);
-  $('gesture-description').textContent = sculpting ? '局部轮廓已抓住，慢慢拉出新的形状' : pinched ? escapeLatch ? '已结束抓取，请先张开手指' : '请先松开，再靠近虚线区域捏合' : tracking ? hover ? '位置刚刚好，捏合拇指与食指' : '移动光标，靠近整个轮廓' : active ? '将一只手完整放入摄像头画面' : '开启摄像头后，将一只手放入画面';
+  $('gesture-description').textContent = sculpting ? '局部已抓住，慢慢调整软乎乎的比例' : pinched ? escapeLatch ? '已结束抓取，请先张开手指' : '请先松开，再靠近虚线区域捏合' : tracking ? hover ? '位置刚刚好，捏合拇指与食指' : '移动光标，靠近整个轮廓' : active ? '将一只手完整放入摄像头画面' : mouse ? '在观察室中拖动耳朵、主体或四肢' : '开启摄像头后，将一只手放入画面';
   $('tracking-status').textContent = cameraState === 'requesting' ? '等待摄像头授权…' : cameraState === 'loading' ? '正在加载本地手部模型…' : cameraState === 'error' ? '摄像头或追踪暂不可用' : active ? tracking ? '已识别 1 只手 · 追踪中' : '摄像头已连接 · 等待手部入镜' : '摄像头未开启';
-  $('stage-tip').innerHTML = `${icon(sculpting ? 'expand' : 'hand')} ${sculpting ? '保持捏合移动，松开即可定型' : tracking ? '任意位置捏合向外拉，可反复长出触须' : active ? '手掌面对镜头，让五根手指完整入镜' : '打开摄像头，和弥弥打个招呼'}`;
+  $('stage-tip').innerHTML = `${icon(sculpting ? 'expand' : 'hand')} ${sculpting ? (mouse ? '拖动调整比例，松开即可定型' : '保持捏合移动，松开即可定型') : tracking ? '轻轻捏住耳朵、身体或四肢，调整比例' : active ? '手掌面对镜头，让五根手指完整入镜' : mouse ? '用鼠标拖动局部，体验有边界的柔软塑形' : '打开摄像头，和弥弥打个招呼'}`;
   $('stage').classList.toggle('is-sculpting', sculpting);
 }
 
@@ -224,6 +229,7 @@ const tracker = new CameraTracker(video, {
     if (document.hidden || document.querySelector('dialog[open]')) { clearHand(); updateStatus(); return; }
     const landmarks = results.multiHandLandmarks?.[0];
     const now = performance.now();
+    if (inputMode === 'mouse') { drawTracking(landmarks, false); return; }
     if (!landmarks) {
       drawTracking(null, false);
       if (now - lastSeen > 350) { clearHand(); updateStatus(); }
@@ -263,7 +269,7 @@ $('reset-button').addEventListener('click', () => {
 });
 $('brush-size').addEventListener('input', event => {
   const value = Number(event.target.value); sculpture.radius = value;
-  $('brush-label').textContent = value < 39 ? '纤细触须' : value < 65 ? '柔软肢体' : '宽幅塑形';
+  $('brush-label').textContent = value < 65 ? '细腻' : value < 92 ? '适中' : '宽柔';
 });
 function undoShape() {
   if (!sculpture.undo()) return;
@@ -281,6 +287,58 @@ $('sensitivity').addEventListener('input', (event) => {
   const value = Number(event.target.value);
   $('sensitivity-value').textContent = value < 28 ? '较低' : value > 36 ? '较高' : '适中';
 });
+const stage = $('stage');
+function stagePoint(event) {
+  const matrix = $('creature-stage').getScreenCTM();
+  if (!matrix) return null;
+  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+  return { x: point.x, y: point.y };
+}
+function setInputMode(mode) {
+  clearHand(); inputMode = mode;
+  $('gesture-mode').setAttribute('aria-pressed', mode === 'gesture');
+  $('mouse-mode').setAttribute('aria-pressed', mode === 'mouse');
+  stage.classList.toggle('mouse-input', mode === 'mouse');
+  updateStatus();
+}
+$('gesture-mode').addEventListener('click', () => setInputMode('gesture'));
+$('mouse-mode').addEventListener('click', () => setInputMode('mouse'));
+stage.addEventListener('pointerdown', event => {
+  if (inputMode !== 'mouse' || event.button !== 0 || mousePointer !== null) return;
+  const point = stagePoint(event);
+  if (!point || !sculpture.begin(point)) return;
+  event.preventDefault(); mousePointer = event.pointerId;
+  stage.setPointerCapture(event.pointerId); cursor = point; hover = sculpture.hitTest(point); updateStatus();
+});
+stage.addEventListener('pointermove', event => {
+  if (inputMode !== 'mouse') return;
+  const point = stagePoint(event); if (!point) return;
+  cursor = point; hover = sculpture.hitTest(point);
+  if (mousePointer === event.pointerId) sculpture.move(point);
+  updateStatus();
+});
+function endMouse(event) {
+  if (mousePointer !== event.pointerId) return;
+  release(); mousePointer = null;
+  if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+  updateStatus();
+}
+stage.addEventListener('pointerup', endMouse);
+stage.addEventListener('pointercancel', endMouse);
+stage.addEventListener('lostpointercapture', endMouse);
+stage.addEventListener('pointerleave', () => { if (inputMode === 'mouse' && mousePointer === null) { cursor = null; hover = null; updateStatus(); } });
+function paintSkin(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+  $('skin-color').value = hex;
+  const rgb = hex.match(/[0-9a-f]{2}/gi).map(value => parseInt(value, 16));
+  const blend = (to, amount) => `rgb(${rgb.map((v, i) => Math.round(v + (to[i] - v) * amount)).join(',')})`;
+  const colors = [blend([255, 247, 240], .9), blend([255, 247, 250], .55), hex, blend([100, 80, 119], .24), blend([85, 63, 99], .38)];
+  document.querySelectorAll('#pearl-skin stop').forEach((stop, index) => stop.setAttribute('stop-color', colors[index]));
+  document.querySelectorAll('.color-swatch').forEach(button => button.setAttribute('aria-pressed', button.dataset.color === hex));
+}
+$('skin-color').addEventListener('input', event => paintSkin(event.target.value));
+document.querySelectorAll('.color-swatch').forEach(button => button.addEventListener('click', () => paintSkin(button.dataset.color)));
+paintSkin($('skin-color').value);
 function openDialog(id) {
   release(false);
   escapeLatch = true;
@@ -313,10 +371,9 @@ function render(now, previous = now) {
   $('head-shine').setAttribute('d', `M ${pointString([377, 275])} Q ${pointString([403, 240])} ${pointString([439, 238])}`);
   const glow = skin(437, 280); $('head-glow').setAttribute('cx', glow.x); $('head-glow').setAttribute('cy', glow.y);
   const belly = skin(476, 488); $('belly').setAttribute('cx', belly.x); $('belly').setAttribute('cy', belly.y);
-  const left = skin(420, 340), right = skin(540, 340), top = skin(480, 290), bottom = skin(480, 390), center = skin(480, 340);
-  const a = clamp((right.x - left.x) / 120, .65, 1.5), b = clamp((right.y - left.y) / 120, -.5, .5);
-  const c = clamp((bottom.x - top.x) / 100, -.5, .5), d = clamp((bottom.y - top.y) / 100, .65, 1.5);
-  $('face').setAttribute('transform', `matrix(${a} ${b} ${c} ${d} ${center.x - a * 480 - c * 340} ${center.y - b * 480 - d * 340})`);
+  // Face follows the protected head as a rigid group: never scale or shear the eyes/mouth.
+  const pose = facePose(shape.params);
+  $('face').setAttribute('transform', `translate(${pose.x - 480} ${pose.y - 340})`);
   const xs = shape.body.map(p => p.x), ys = shape.body.map(p => p.y);
   $('ground-shadow').setAttribute('rx', clamp((Math.max(...xs) - Math.min(...xs)) * .48, 100, 330));
   $('ground-shadow').setAttribute('cy', Math.min(675, Math.max(...ys) + 23));
@@ -333,11 +390,11 @@ function render(now, previous = now) {
   if (!sculpture.grab && releasedAt && now - releasedAt < 3000) $('mood-text').textContent = '嗯！这个样子，也很喜欢';
   // Pause interaction behind modal dialogs and if video stops producing frames.
   if (document.querySelector('dialog[open]') && sculpture.grab) { release(false); escapeLatch = true; updateStatus(); }
-  if (cameraState === 'active' && cursor && now - lastSeen > 500) { clearHand(); updateStatus(); }
+  if (inputMode === 'gesture' && cameraState === 'active' && cursor && now - lastSeen > 500) { clearHand(); updateStatus(); }
   $('hand-cursor').setAttribute('opacity', cursor ? 1 : 0);
   if (cursor) {
     $('hand-cursor').setAttribute('transform', `translate(${cursor.x} ${cursor.y})`);
-    const engaged = currentGesture?.pinched;
+    const engaged = inputMode === 'mouse' ? mousePointer !== null : currentGesture?.pinched;
     $('cursor-ring').setAttribute('r', engaged ? 15 : hover ? 24 : 21);
     $('cursor-ring').setAttribute('stroke', sculpture.grab ? '#d3a184' : '#9274a6');
     $('cursor-label').textContent = sculpture.grab ? '正在塑形 · 松开定型' : engaged ? '已捏合' : hover ? '可以捏住' : '任意位置都能捏';

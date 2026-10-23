@@ -17,5 +17,5 @@ with ZipFile(output, 'w', ZIP_DEFLATED, compresslevel=6) as archive:
             archive.write(path, Path('unnamed-creature/app') / path.relative_to(dist))
 with ZipFile(output) as archive:
     assert archive.testzip() is None
-copyfile(output, output.with_name('unnamed-creature-windows-v2.zip'))
+copyfile(output, output.with_name('unnamed-creature-windows-v3.zip'))
 print(f'Windows package: {output} ({output.stat().st_size / 1024 / 1024:.1f} MB)')

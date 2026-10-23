@@ -7,9 +7,9 @@ test('桌面页面、指南、档案和重置可用；鼠标不会改变生物�
   await expect(page.getByRole('heading', { name: '捏一点，不一样。' })).toBeVisible();
   await expect(page.locator('#body')).toHaveAttribute('d', /^M /);
   await expect(page.getByRole('button', { name: '撤销一步' })).toBeDisabled();
-  await page.locator('#brush-size').fill('82');
-  await expect(page.locator('#brush-label')).toHaveText('宽幅塑形');
-  await page.locator('#brush-size').fill('32');
+  await page.locator('#brush-size').fill('102');
+  await expect(page.locator('#brush-label')).toHaveText('宽柔');
+  await page.locator('#brush-size').fill('76');
   const before = await page.locator('#body').getAttribute('d');
   await page.mouse.move(500, 450); await page.mouse.down();
   await page.mouse.move(650, 500); await page.mouse.up();
@@ -34,6 +34,35 @@ test('移动端布局无水平溢出', async ({ page }) => {
   await expect(page.locator('#camera-button')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/mobile.png', fullPage: true });
+});
+
+test('显式鼠标模式共用受限形变，撤销与涂色可用，五官不被缩放', async ({ page }) => {
+  await page.goto('/');
+  const original = await page.locator('#body').getAttribute('d');
+  await page.getByRole('button', { name: '鼠标塑形', exact: true }).click();
+  const coords = await page.locator('#creature-stage').evaluate(svg => {
+    const m = svg.getScreenCTM();
+    const from = new DOMPoint(631, 460).matrixTransform(m);
+    const to = new DOMPoint(655, 507).matrixTransform(m);
+    return { from: { x: from.x, y: from.y }, to: { x: to.x, y: to.y } };
+  });
+  await page.mouse.move(coords.from.x, coords.from.y); await page.mouse.down();
+  await page.mouse.move(coords.to.x, coords.to.y, { steps: 8 });
+  await expect(page.locator('#stage-state')).toHaveText('鼠标塑形');
+  await page.mouse.up();
+  await expect(page.locator('#edit-counter')).toContainText('01');
+  await expect(page.locator('#body')).not.toHaveAttribute('d', original);
+  await expect(page.locator('#face')).toHaveAttribute('transform', /^translate\(/);
+  await expect(page.locator('#eyes ellipse').first()).toHaveAttribute('rx', '26');
+  await page.getByRole('button', { name: '薄荷色', exact: true }).click();
+  await expect(page.locator('#pearl-skin stop').nth(2)).toHaveAttribute('stop-color', '#b6d5c0');
+  await page.getByRole('button', { name: '撤销一步', exact: true }).click();
+  await expect(page.locator('#body')).toHaveAttribute('d', original);
+  await expect(page.locator('#skin-color')).toHaveValue('#b6d5c0');
+  await page.getByRole('button', { name: '重置形态', exact: true }).click();
+  await expect(page.locator('#skin-color')).toHaveValue('#b6d5c0');
+  await page.getByRole('button', { name: '隔空手势', exact: true }).click();
+  await expect(page.locator('#stage-state')).toHaveText('等待手势');
 });
 
 test('摄像头拒绝授权后显示可恢复提示，允许再次尝试', async ({ page }) => {
