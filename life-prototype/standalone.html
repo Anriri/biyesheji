@@ -290,6 +290,38 @@ main {
     }
     return fraction;
   }
+
+  function relaxContour(candidate) {
+    const points = clone(candidate);
+    // Repair the few material edges/corners that reached a limit, rather than
+    // cancelling the entire grab because one vertex cannot move as requested.
+    for (let pass = 0; pass < 24; pass++) {
+      let repaired = false;
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i], b = points[(i + 1) % points.length];
+        const edge = distance(a, b), target = clamp(edge, restEdges[i] * .305, restEdges[i] * 3.79);
+        if (Math.abs(target - edge) > 1e-6 && edge > 1e-8) {
+          const scale = (edge - target) / edge * .5;
+          const dx = (b.x - a.x) * scale, dy = (b.y - a.y) * scale;
+          a.x += dx; a.y += dy; b.x -= dx; b.y -= dy;
+          repaired = true;
+        }
+      }
+      const next = clone(points);
+      for (let i = 0; i < points.length; i++) {
+        const a = points[(i + points.length - 1) % points.length], p = points[i], b = points[(i + 1) % points.length];
+        const cosine = ((p.x - a.x) * (b.x - p.x) + (p.y - a.y) * (b.y - p.y)) / (distance(a, p) * distance(p, b) || 1);
+        if (Math.acos(clamp(cosine, -1, 1)) > .85) {
+          next[i].x += ((a.x + b.x) / 2 - p.x) * .22;
+          next[i].y += ((a.y + b.y) / 2 - p.y) * .22;
+          repaired = true;
+        }
+      }
+      points.forEach((p, i) => { p.x = next[i].x; p.y = next[i].y; });
+      if (!repaired) break;
+    }
+    return points;
+  }
   class SoftSculpt {
     constructor() { this.shape = clone(REST); this.history = []; this.grab = null; }
     hitTest(point) {
@@ -337,21 +369,38 @@ main {
       // a pancake, while a sideways squeeze makes a taller, narrower form.
       const spreadX = clamp(pressure / bounds.height, 0, .75) * verticalPress * .65;
       const spreadY = clamp(pressure / bounds.width, 0, .75) * horizontalPress * .45;
-      const changes = before.map((p, i) => ({
-        x: dx * weights[i] + (p.x - bounds.cx) * spreadX,
-        y: dy * weights[i] + (p.y - bounds.cy) * spreadY,
-      }));
+      const changes = before.map((p, i) => ({ x: dx * weights[i], y: dy * weights[i] }));
       const tx = axisTravel(before, changes, 'x', -365, 365, SCULPT_LIMITS.width, SCULPT_LIMITS.minWidth);
       const ty = axisTravel(before, changes, 'y', -410, 85, SCULPT_LIMITS.height, SCULPT_LIMITS.minHeight);
-      const at = t => before.map((p, i) => ({
-        x: p.x + changes[i].x * tx * t,
-        y: p.y + changes[i].y * ty * t,
+      const primary = before.map((p, i) => ({
+        x: p.x + changes[i].x * tx,
+        y: p.y + changes[i].y * ty,
+      }));
+      const flow = before.map((p, i) => {
+        // Fade pressure redistribution to zero outside this neighborhood. A small
+        // corner push must not inflate a distant tip or reshape the whole body.
+        const local = 1 - ease((materialDistance[i] / reach - 1.5) / 1.5);
+        return { x: (p.x - bounds.cx) * spreadX * local, y: (p.y - bounds.cy) * spreadY * local };
+      });
+      // Pressure flow is secondary: reaching a distant boundary must not suppress
+      // the user's inward handle motion. Fit flow into space left AFTER that move.
+      const fx = axisTravel(primary, flow, 'x', -365, 365, SCULPT_LIMITS.width, SCULPT_LIMITS.minWidth);
+      const fy = axisTravel(primary, flow, 'y', -410, 85, SCULPT_LIMITS.height, SCULPT_LIMITS.minHeight);
+      const at = (t, pressureFlow = 1) => before.map((p, i) => ({
+        x: p.x + (changes[i].x * tx + flow[i].x * fx * pressureFlow) * t,
+        y: p.y + (changes[i].y * ty + flow[i].y * fy * pressureFlow) * t,
       }));
       const candidate = at(1);
       if (validShape(candidate)) { this.shape = candidate; return; }
+      const relaxed = relaxContour(candidate);
+      if (validShape(relaxed)) { this.shape = relaxed; return; }
+      const withoutFlow = relaxContour(at(1, 0));
+      if (validShape(withoutFlow)) { this.shape = withoutFlow; return; }
       let low = 0, high = 1, accepted = clone(before);
       for (let i = 0; i < 10; i++) {
-        const t = (low + high) / 2, shape = at(t);
+        const t = (low + high) / 2;
+        let shape = at(t);
+        if (!validShape(shape)) shape = relaxContour(shape);
         if (validShape(shape)) { low = t; accepted = shape; } else high = t;
       }
       this.shape = accepted;

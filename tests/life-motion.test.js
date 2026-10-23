@@ -7,6 +7,7 @@ const context = {};
 vm.runInNewContext(readFileSync(new URL('../life-prototype/creature.js', import.meta.url), 'utf8'), context);
 const { samplePose, makeContour, closedPath, blinkAt } = context.CreatureMotion;
 const { SoftSculpt, validShape, safeFace, renderedOutline, SCULPT_LIMITS } = context.CreatureMotion;
+const cornerFixtures = JSON.parse(readFileSync(new URL('./fixtures/life-contour-corners.json', import.meta.url), 'utf8'));
 const area = points => Math.abs(points.reduce((sum, p, i) => {
   const q = points[(i + 1) % points.length];
   return sum + p.x * q.y - p.y * q.x;
@@ -202,4 +203,39 @@ test('连续塑形：压到最低高度后仍能横拉，之后可再向上拉�
   sculpt.begin(top); sculpt.move({ x: top.x, y: top.y - 140 }); sculpt.release();
   assert.ok(Math.min(...sculpt.shape.map(p => p.y)) < top.y - 100);
   assert.ok(validShape(sculpt.shape));
+});
+
+test('局部揉捏：已到曲率限制的左下凸角能连续内收，远处受限角不会锁住拖动', () => {
+  // Captured from the previous solver after the recorded mouse edits. The old
+  // solver moved these handles only 0.06 and 0 units for the same 65-unit pull.
+  for (const fixture of Object.values(cornerFixtures)) {
+    const sculpt = new SoftSculpt();
+    sculpt.shape = fixture.shape.map(p => ({ ...p }));
+    assert.ok(validShape(sculpt.shape));
+    const original = JSON.stringify(sculpt.shape), from = { ...sculpt.shape[fixture.index] };
+    assert.ok(sculpt.begin(from));
+    const far = sculpt.grab.materialDistance.indexOf(Math.max(...sculpt.grab.materialDistance));
+    let last = sculpt.shape.map(p => ({ ...p }));
+    for (let step = 1; step <= 26; step++) {
+      sculpt.move({ x: from.x + fixture.delta.x * step / 26, y: from.y + fixture.delta.y * step / 26 });
+      assert.ok(validShape(sculpt.shape));
+      const jump = Math.max(...sculpt.shape.map((p, i) => Math.hypot(p.x - last[i].x, p.y - last[i].y)));
+      assert.ok(jump < 15, `unexpected contour jump: ${jump}`);
+      last = sculpt.shape.map(p => ({ ...p }));
+    }
+    const point = sculpt.shape[fixture.index];
+    assert.ok(((point.x - from.x) * fixture.delta.x + (point.y - from.y) * fixture.delta.y) / 65 > 40);
+    assert.ok(Math.hypot(sculpt.shape[far].x - fixture.shape[far].x, sculpt.shape[far].y - fixture.shape[far].y) < 20, 'local inward sculpting must preserve distant features');
+    assert.ok(sculpt.release());
+    const custom = JSON.stringify(sculpt.shape);
+    for (let t = 0; t < 8; t += .1) assert.ok(safeFace(makeContour(t, samplePose(t), 1, sculpt.shape)));
+    assert.equal(JSON.stringify(sculpt.shape), custom);
+    const inward = { ...sculpt.shape[fixture.index] };
+    assert.ok(sculpt.begin(inward));
+    sculpt.move({ x: inward.x - fixture.delta.x * .7, y: inward.y - fixture.delta.y * .7 });
+    assert.ok(Math.hypot(sculpt.shape[fixture.index].x - inward.x, sculpt.shape[fixture.index].y - inward.y) > 25, 'the same area can be pulled out again');
+    sculpt.release();
+    assert.ok(sculpt.undo()); assert.equal(JSON.stringify(sculpt.shape), custom);
+    assert.ok(sculpt.undo()); assert.equal(JSON.stringify(sculpt.shape), original);
+  }
 });

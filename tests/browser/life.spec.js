@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const entry = 'http://localhost:5173/life-prototype/standalone.html';
 const html = readFileSync(new URL('../../life-prototype/standalone.html', import.meta.url), 'utf8');
+const cornerFixture = JSON.parse(readFileSync(new URL('../fixtures/life-contour-corners.json', import.meta.url), 'utf8')).lowerLeftCorner;
 
 // The managed Chromium blocks all file:// navigation. Deliver the exact portable HTML
 // through a route fixture instead; no bundling, dev-client injection or network is used.
@@ -207,4 +208,43 @@ test('连续鼠标塑形：先向两边拉宽，再抓顶部向上拉，保留�
   await page.keyboard.press('Control+z');
   await expect.poll(async () => (await dimensions()).height).toBeLessThan(wide.height + 25);
   expect((await dimensions()).width).toBeGreaterThan(wide.width - 55);
+});
+
+test('左下凸角：从旧版卡住的有效轮廓开始，用真实鼠标向内收，再向外拉', async ({ page }) => {
+  // Start from a captured valid user-shaped contour; only this test fixture sets
+  // initial state. All subsequent edits use the application's real pointer path.
+  const fixtureHTML = html.replace('const sculpt = new SoftSculpt();', `const sculpt = new SoftSculpt(); sculpt.shape = ${JSON.stringify(cornerFixture.shape)};`)
+    .replace('const points = makeContour(0, samplePose(0, amount), amount);', 'const points = makeContour(0, samplePose(0, amount), amount, sculpt.shape);');
+  await page.route(entry, route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: fixtureHTML }));
+  await page.goto(entry);
+  async function contact() {
+    return page.locator('#body').evaluate((p, index) => {
+      const values = p.getAttribute('d').match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi).map(Number);
+      const offset = index === 0 ? 0 : 2 + (index - 1) * 6 + 4;
+      const point = new DOMPoint(values[offset], values[offset + 1]);
+      const matrix = p.getScreenCTM(), screen = point.matrixTransform(matrix);
+      return { x: point.x, y: point.y, clientX: screen.x, clientY: screen.y, scale: Math.hypot(matrix.a, matrix.b) };
+    }, cornerFixture.index);
+  }
+  const initial = await contact();
+  await page.screenshot({ path: 'test-results/life-corner-before.png' });
+  async function pull(sign) {
+    const from = await contact();
+    await page.mouse.move(from.clientX, from.clientY); await page.mouse.down();
+    await expect(page.locator('.scene')).toHaveClass(/is-sculpting/);
+    await page.mouse.move(from.clientX + cornerFixture.delta.x * from.scale * sign, from.clientY + cornerFixture.delta.y * from.scale * sign, { steps: 30 });
+    await page.waitForTimeout(350); await page.mouse.up();
+    await page.waitForTimeout(1400);
+  }
+  await pull(1);
+  const inward = await contact();
+  expect(((inward.x - initial.x) * cornerFixture.delta.x + (inward.y - initial.y) * cornerFixture.delta.y) / 65).toBeGreaterThan(35);
+  await page.screenshot({ path: 'test-results/life-corner-inward.png' });
+  await pull(-.7);
+  const outward = await contact();
+  expect(Math.hypot(outward.x - inward.x, outward.y - inward.y)).toBeGreaterThan(20);
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => { const p = await contact(); return Math.hypot(p.x - inward.x, p.y - inward.y); }).toBeLessThan(12);
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => { const p = await contact(); return Math.hypot(p.x - initial.x, p.y - initial.y); }).toBeLessThan(12);
 });

@@ -25,6 +25,7 @@ with ZipFile(destination, 'w', ZIP_DEFLATED) as archive:
         '增强塑形：鼠标按住轮廓向外拉，可明显拉长；顶部下压可压扁并摊宽。\n'
         '每次局部修改可以叠加，最大拉伸约为旧版的 2—3 倍。\n'
         '连续塑形修正版：先向两边拉宽，再抓顶部向上拉；拉宽不会用尽向上拉的额度。\n'
+        '局部揉捏修正版：凸出的小角可往身体内收，也可以再次往外拉。\n'
         '松开后会有自然的 Q 弹晃动，最后保留塑形结果，不会恢复原状。\n'
         '点击撤销或按 Ctrl+Z 回退，点击重置恢复初始形状。重置也能撤销。\n'
         '推荐 Chrome、Edge、Firefox 或 Safari。\n'
@@ -37,4 +38,5 @@ with ZipFile(destination) as archive:
 copyfile(destination, destination.with_name('unnamed-creature-life-sculpt.zip'))
 copyfile(destination, destination.with_name('unnamed-creature-life-sculpt-v2.zip'))
 copyfile(destination, destination.with_name('unnamed-creature-life-sculpt-v3.zip'))
+copyfile(destination, destination.with_name('unnamed-creature-life-sculpt-v4.zip'))
 print(f'Standalone HTML and ZIP prepared: {destination} ({destination.stat().st_size:,} bytes)')
