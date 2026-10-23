@@ -25,18 +25,28 @@
         </defs>
         <ellipse id="floor" cx="320" cy="437" rx="111" ry="13" fill="url(#floor-softness)" />
         <g id="creature" transform="translate(320 428)">
-          <path id="body" fill="#ffffff" filter="url(#soft-edge)" />
+          <g id="skin" fill="#ffffff" filter="url(#soft-edge)">
+            <path id="body" fill="#ffffff" />
+            <g id="limbs" fill="#ffffff"></g>
+          </g>
           <g id="eyes" fill="#292940">
             <ellipse id="eye-left" cx="-29" cy="-120" rx="10.2" ry="15.5" />
             <ellipse id="eye-right" cx="29" cy="-120" rx="10.2" ry="15.5" />
           </g>
+          <g id="limb-controls" aria-label="肢体调整控制点"></g>
         </g>
       </svg>
       <div class="tools" role="group" aria-label="塑形操作">
+        <button id="body-mode" type="button" aria-pressed="true">揉捏身体</button>
+        <button id="limb-mode" type="button" aria-pressed="false">长出肢体</button>
+        <span aria-hidden="true"></span>
         <button id="undo" type="button" disabled title="撤销上一次塑形（Ctrl+Z / ⌘Z）">撤销</button>
         <span aria-hidden="true"></span>
         <button id="reset" type="button" disabled title="恢复初始形状，仍可撤销">重置</button>
+        <label id="width-control" hidden>粗细 <input id="limb-width" type="range" min="5" max="42" step="1" value="17" aria-label="肢体粗细" /></label>
+        <button id="delete-limb" type="button" hidden>删除肢体</button>
       </div>
+      <p id="interaction-hint" aria-live="polite">拖动身体揉捏 · 切换「长出肢体」可从边缘拉出新肢体</p>
     </main>
   </body>
 </html>

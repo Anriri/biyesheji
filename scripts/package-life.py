@@ -26,6 +26,10 @@ with ZipFile(destination, 'w', ZIP_DEFLATED) as archive:
         '每次局部修改可以叠加，最大拉伸约为旧版的 2—3 倍。\n'
         '连续塑形修正版：先向两边拉宽，再抓顶部向上拉；拉宽不会用尽向上拉的额度。\n'
         '局部揉捏修正版：凸出的小角可往身体内收，也可以再次往外拉。\n'
+        '新增自由肢体：点击“长出肢体”，按住身体边缘向外拖，松手保留。\n'
+        '点击肢体选中；末端圆点调整长短方向，中间圆点调整弯曲，滑块调整粗细。\n'
+        '可添加多个肢体；点击“删除肢体”或按 Delete 删除选中肢体。\n'
+        '点击“揉捏身体”回到原有身体塑形；所有身体和肢体操作共用撤销历史。\n'
         '松开后会有自然的 Q 弹晃动，最后保留塑形结果，不会恢复原状。\n'
         '点击撤销或按 Ctrl+Z 回退，点击重置恢复初始形状。重置也能撤销。\n'
         '推荐 Chrome、Edge、Firefox 或 Safari。\n'
@@ -39,4 +43,5 @@ copyfile(destination, destination.with_name('unnamed-creature-life-sculpt.zip'))
 copyfile(destination, destination.with_name('unnamed-creature-life-sculpt-v2.zip'))
 copyfile(destination, destination.with_name('unnamed-creature-life-sculpt-v3.zip'))
 copyfile(destination, destination.with_name('unnamed-creature-life-sculpt-v4.zip'))
+copyfile(destination, destination.with_name('unnamed-creature-life-limbs-v1.zip'))
 print(f'Standalone HTML and ZIP prepared: {destination} ({destination.stat().st_size:,} bytes)')

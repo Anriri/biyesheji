@@ -43,6 +43,10 @@ main {
   bottom: max(28px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: max-content;
+  max-width: calc(100vw - 24px);
   align-items: center;
   gap: 9px;
   padding: 4px 8px;
@@ -64,3 +68,13 @@ main {
 .tools button:hover:not(:disabled) { background: #eeebe7; color: #514c48; }
 .tools button:disabled { color: #c9c5c0; cursor: default; }
 .tools button:focus-visible { outline: 2px solid #b2aaa1; outline-offset: 2px; }
+.tools button[aria-pressed="true"] { background: #ece8e3; color: #514c48; }
+#width-control { align-items: center; gap: 8px; color: #85817d; font: 12px system-ui, sans-serif; }
+#width-control:not([hidden]) { display: flex; }
+#limb-width { width: 85px; accent-color: #9690a5; }
+#interaction-hint { position: fixed; bottom: 90px; margin: 0 16px; max-width: calc(100vw - 32px); text-align: center; color: #96908a; font: 12px/1.6 system-ui, sans-serif; pointer-events: none; }
+.limb-skin { cursor: pointer; }
+.limb-handle { fill: #fbfaf8; stroke: #a59ab9; stroke-width: 1.5; cursor: grab; vector-effect: non-scaling-stroke; }
+.limb-handle.bend { fill: #e4deee; }
+.limb-guide { stroke: #b7aec7; stroke-width: 1; stroke-dasharray: 3 5; fill: none; pointer-events: none; vector-effect: non-scaling-stroke; }
+@media (max-width: 600px) { #interaction-hint { bottom: 126px; font-size: 11px; } .tools button { padding: 7px 10px; } }
