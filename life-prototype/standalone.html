@@ -88,6 +88,37 @@ main {
 .limb-handle.bend { fill: #e4deee; }
 .limb-guide { stroke: #b7aec7; stroke-width: 1; stroke-dasharray: 3 5; fill: none; pointer-events: none; vector-effect: non-scaling-stroke; }
 @media (max-width: 600px) { #interaction-hint { bottom: 126px; font-size: 11px; } .tools button { padding: 7px 10px; } }
+.paint-panel { position: fixed; top: 20px; right: 20px; width: 238px; max-height: calc(100svh - 150px); overflow: auto; padding: 20px; background: #fcfbf8f5; border: 1px solid #e7e4e0; border-radius: 22px; color: #69636a; font: 12px/1.6 system-ui, sans-serif; }
+.paint-panel[hidden] { display: none; }
+.paint-panel h1 { margin: 0; font-size: 18px; font-weight: 550; color: #514c55; }
+.paint-panel p { margin: 5px 0 16px; color: #96908a; }
+.paint-panel button { border: 1px solid #e5e0e8; border-radius: 12px; background: #fff; padding: 7px 10px; color: #69636a; font: inherit; cursor: pointer; }
+.paint-panel button[aria-pressed="true"] { background: #eee8f6; border-color: #c7b6db; }
+.paint-panel button:disabled { opacity: .4; cursor: default; }
+.paint-tool-row, .fill-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
+.paint-label { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0 8px; }
+#paint-color { width: 70px; height: 34px; padding: 2px; border: 1px solid #e7e1e9; border-radius: 10px; background: #fff; cursor: pointer; }
+#brush-size { width: 100%; accent-color: #ab88bf; }
+#paint-target { width: 100%; border: 1px solid #e7e1e9; background: #fff; border-radius: 10px; padding: 8px; color: #69636a; }
+.swatch-row { margin-top: 12px; }
+.swatch-row small { display: block; margin-bottom: 5px; color: #96908a; }
+.swatch-row .swatch { width: 25px; height: 25px; padding: 0; margin: 0 5px 0 0; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #e7e1e9; }
+.swatch-row .swatch[aria-pressed="true"] { outline: 2px solid #82738d; outline-offset: 1px; }
+.paint-layer { pointer-events: none; }
+main.is-painting { padding-right: 280px; }
+main.is-painting .scene { width: min(calc(100vw - 310px), 100svh, 760px); cursor: crosshair; }
+main.is-painting #body, main.is-painting .limb-skin { cursor: crosshair; }
+main.is-painting #limb-controls { display: none; }
+#art-status { position: fixed; top: 15px; left: 20px; max-width: min(440px, calc(100vw - 40px)); color: #82738d; font: 12px/1.6 system-ui, sans-serif; pointer-events: none; }
+@media (max-width: 760px) {
+  main.is-painting { padding-right: 0; }
+  main.is-painting .scene { width: min(96vw, 100svh, 760px); }
+  .paint-panel { top: 10px; right: 12px; width: calc(100vw - 24px); max-height: 210px; padding: 12px; border-radius: 16px; }
+  .paint-panel h1 { font-size: 15px; }
+  .paint-panel p { margin-bottom: 8px; }
+  #art-status { top: auto; bottom: 145px; }
+  #interaction-hint { bottom: 175px; }
+}
 
 </style>
   </head>
@@ -120,13 +151,38 @@ main {
       <div class="tools" role="group" aria-label="塑形操作">
         <button id="body-mode" type="button" aria-pressed="true">揉捏身体</button>
         <button id="limb-mode" type="button" aria-pressed="false">长出肢体</button>
+        <button id="paint-mode" type="button" aria-pressed="false">自由涂色</button>
         <span aria-hidden="true"></span>
-        <button id="undo" type="button" disabled title="撤销上一次塑形（Ctrl+Z / ⌘Z）">撤销</button>
+        <button id="undo" type="button" disabled title="撤销上一次操作（Ctrl+Z / ⌘Z）">撤销</button>
+        <button id="redo" type="button" disabled title="重做（Ctrl+Shift+Z / Ctrl+Y）">重做</button>
         <span aria-hidden="true"></span>
-        <button id="reset" type="button" disabled title="恢复初始形状，仍可撤销">重置</button>
+        <button id="reset" type="button" disabled title="恢复初始作品，清除形态和涂色，仍可撤销">重置</button>
         <label id="width-control" hidden>粗细 <input id="limb-width" type="range" min="5" max="42" step="1" value="17" aria-label="肢体粗细" /></label>
         <button id="delete-limb" type="button" hidden>删除肢体</button>
+        <button id="save-art" type="button" title="下载可继续编辑的 JSON 作品文件">保存作品</button>
+        <button id="open-art" type="button" title="从 JSON 文件恢复完整作品">打开作品</button>
       </div>
+      <aside id="paint-panel" class="paint-panel" aria-label="自由涂色工具" hidden>
+        <h1>给它一点颜色</h1>
+        <p>笔迹随身体和分枝一起动</p>
+        <div class="paint-tool-row">
+          <button id="brush-tool" type="button" aria-pressed="true">画笔</button>
+          <button id="eraser-tool" type="button" aria-pressed="false">橡皮擦</button>
+        </div>
+        <label class="paint-label">自由选色 <input id="paint-color" type="color" value="#ff6695" aria-label="画笔颜色" /></label>
+        <div id="color-swatches" aria-label="预设色卡"></div>
+        <label class="paint-label">笔刷大小 <output id="brush-size-value">18</output><input id="brush-size" type="range" min="2" max="70" value="18" aria-label="画笔粗细" /></label>
+        <label class="paint-label" for="paint-target">绘画部位</label>
+        <select id="paint-target" aria-label="绘画部位"><option value="auto">自动识别部位</option><option value="body">身体</option></select>
+        <div class="fill-actions">
+          <button id="fill-body" type="button">身体底色</button>
+          <button id="fill-limb" type="button" disabled>所选肢体底色</button>
+          <button id="fill-all" type="button">全身底色</button>
+        </div>
+        <p>底色独立于笔迹。橡皮擦只擦涂鸦，擦过的位置还能重新画。</p>
+      </aside>
+      <input id="art-file" type="file" accept=".json,application/json" hidden aria-label="打开作品文件" />
+      <p id="art-status" role="status" aria-live="polite"></p>
       <p id="interaction-hint" aria-live="polite">拖动身体揉捏 · 切换「长出肢体」可从边缘拉出新肢体</p>
     </main>
     <script>
@@ -608,27 +664,138 @@ main {
     }
     setWidth(value) { if (this.active && Number.isFinite(Number(value))) this.active.width = clamp(Number(value), 5, 42); }
   }
+  const partKey = id => id == null ? 'body' : `limb:${id}`;
+  const validColor = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
+  function bindPaintPoint(point, vertices) {
+    const vectors = vertices.map(p => ({ x: p.x - point.x, y: p.y - point.y }));
+    const radii = vectors.map(p => Math.hypot(p.x, p.y));
+    const hit = radii.findIndex(r => r < 1e-7);
+    if (hit >= 0) return radii.map((_, i) => i === hit ? 1 : 0);
+    const halfAngles = vectors.map((p, i) => {
+      const j = (i + 1) % vertices.length, q = vectors[j];
+      const denominator = radii[i] * radii[j] + p.x * q.x + p.y * q.y;
+      return Math.abs(denominator) < 1e-10 ? null : (p.x * q.y - p.y * q.x) / denominator;
+    });
+    const edge = halfAngles.indexOf(null);
+    if (edge >= 0) {
+      const next = (edge + 1) % vertices.length, total = radii[edge] + radii[next];
+      return radii.map((_, i) => i === edge ? radii[next] / total : i === next ? radii[edge] / total : 0);
+    }
+    let weights = radii.map((r, i) => (halfAngles[(i + vertices.length - 1) % vertices.length] + halfAngles[i]) / r);
+    let sum = weights.reduce((a, b) => a + b, 0);
+    if (!Number.isFinite(sum) || Math.abs(sum) < 1e-9 || weights.some(w => !Number.isFinite(w))) {
+      weights = radii.map(r => 1 / (r * r)); sum = weights.reduce((a, b) => a + b, 0);
+    }
+    return weights.map(w => w / sum);
+  }
+  function paintPoint(weights, vertices) {
+    let x = 0, y = 0;
+    for (let i = 0; i < vertices.length; i++) { x += vertices[i].x * weights[i]; y += vertices[i].y * weights[i]; }
+    return { x, y };
+  }
+  function paintPath(anchors, vertices) {
+    const points = anchors.map(weights => paintPoint(weights, vertices));
+    if (!points.length) return '';
+    const first = points[0];
+    if (points.length === 1) return `M ${first.x} ${first.y} l .001 0`;
+    let d = `M ${first.x} ${first.y}`;
+    for (let i = 1; i < points.length - 1; i++) {
+      const p = points[i], q = points[i + 1];
+      d += ` Q ${p.x} ${p.y} ${(p.x + q.x) / 2} ${(p.y + q.y) / 2}`;
+    }
+    const last = points.at(-1);
+    return d + ` L ${last.x} ${last.y}`;
+  }
+  class PaintState {
+    constructor() { this.colors = { body: '#ffffff' }; this.strokes = []; this.active = null; this.nextId = 1; }
+    snapshot() { return { colors: this.colors, strokes: this.strokes }; }
+    restore(state) {
+      this.colors = state?.colors || { body: '#ffffff' }; this.strokes = state?.strokes || [];
+      this.active = null; this.nextId = Math.max(0, ...this.strokes.map(s => s.id)) + 1;
+    }
+    color(part) { return this.colors[part] || '#ffffff'; }
+    setColor(part, color) { if (validColor(color)) this.colors = { ...this.colors, [part]: color.toLowerCase() }; }
+    sample(part, point, vertices, style) {
+      if (!part) { this.active = null; return; }
+      if (!this.active || this.active.part !== part) {
+        const stroke = { id: this.nextId++, part, color: style.color, width: style.width, erase: style.erase, points: [] };
+        this.strokes = [...this.strokes, stroke]; this.active = stroke;
+      }
+      if (this.active.points.length && distance(paintPoint(this.active.points.at(-1), vertices), point) < Math.max(1, style.width * .12)) return;
+      this.active.points.push(bindPaintPoint(point, vertices));
+    }
+    end() { this.active = null; }
+    prune(ids) {
+      const keys = new Set(['body', ...ids.map(partKey)]);
+      this.colors = Object.fromEntries(Object.entries(this.colors).filter(([key]) => keys.has(key)));
+      this.strokes = this.strokes.filter(stroke => keys.has(stroke.part)); this.active = null;
+    }
+  }
+  function validateArtwork(data) {
+    const fail = () => { throw new Error('作品文件格式不正确或数据已损坏，当前作品未更改。'); };
+    const finitePoint = p => p && Number.isFinite(p.x) && Number.isFinite(p.y);
+    if (!data || data.format !== 'unnamed-creature-art' || data.version !== 1) fail();
+    const state = data.state;
+    if (!state || !Array.isArray(state.shape) || state.shape.some(p => !finitePoint(p)) || !validShape(state.shape) || !Array.isArray(state.limbs) || state.limbs.length > 256) fail();
+    const ids = new Set();
+    for (const limb of state.limbs) {
+      if (!limb || typeof limb !== 'object' || Array.isArray(limb)) fail();
+      if (!Number.isSafeInteger(limb.id) || limb.id < 1 || ids.has(limb.id) || !finitePoint(limb.tip) || !finitePoint(limb.bend) || Math.hypot(limb.tip.x, limb.tip.y) > 300.001 || !Number.isFinite(limb.width) || limb.width < 5 || limb.width > 42 || Math.hypot(limb.bend.x, limb.bend.y) > limbBendLimit(limb) + .001 || !Number.isFinite(limb.slot) || limb.slot < 0 || limb.slot >= (limb.parentId == null ? 32 : 47) || ![-1, 1].includes(limb.curlSide)) fail();
+      ids.add(limb.id);
+    }
+    for (const limb of state.limbs) if (limb.parentId != null && (!Number.isSafeInteger(limb.parentId) || !ids.has(limb.parentId) || limb.parentId === limb.id)) fail();
+    if (limbGeometries(state.limbs, state.shape).size !== state.limbs.length) fail();
+    if (state.selected != null && !ids.has(state.selected)) fail();
+    const paint = state.paint;
+    if (!paint || !paint.colors || typeof paint.colors !== 'object' || Array.isArray(paint.colors) || !Array.isArray(paint.strokes) || paint.strokes.length > 10000) fail();
+    const parts = new Set(['body', ...Array.from(ids, partKey)]), strokeIds = new Set();
+    for (const [part, color] of Object.entries(paint.colors)) if (!parts.has(part) || !validColor(color)) fail();
+    let count = 0;
+    for (const stroke of paint.strokes) {
+      if (!stroke || typeof stroke !== 'object' || Array.isArray(stroke)) fail();
+      if (!Number.isSafeInteger(stroke.id) || stroke.id < 1 || strokeIds.has(stroke.id) || !parts.has(stroke.part) || !validColor(stroke.color) || typeof stroke.erase !== 'boolean' || !Number.isFinite(stroke.width) || stroke.width < 2 || stroke.width > 70 || !Array.isArray(stroke.points) || !stroke.points.length) fail();
+      strokeIds.add(stroke.id); count += stroke.points.length;
+      if (count > 50000) fail();
+      for (const weights of stroke.points) if (!Array.isArray(weights) || weights.length !== (stroke.part === 'body' ? 32 : 47) || weights.some(w => !Number.isFinite(w) || Math.abs(w) > 1e4) || Math.abs(weights.reduce((a, b) => a + b, 0) - 1) > .001) fail();
+    }
+    return copyData(state);
+  }
   class SculptSession {
-    constructor(body) { this.body = body; this.limbs = new LimbSystem(); this.history = []; }
-    snapshot() { return { shape: clone(this.body.shape), limbs: copyData(this.limbs.items), selected: this.limbs.selected }; }
+    constructor(body) { this.body = body; this.limbs = new LimbSystem(); this.paint = new PaintState(); this.history = []; this.future = []; }
+    snapshot() { return { shape: clone(this.body.shape), limbs: copyData(this.limbs.items), selected: this.limbs.selected, paint: this.paint.snapshot() }; }
     remember(before) {
       const now = this.snapshot();
-      if (JSON.stringify([before.shape, before.limbs]) === JSON.stringify([now.shape, now.limbs])) return false;
-      this.history.push(copyData(before)); if (this.history.length > 40) this.history.shift(); return true;
+      const samePaint = before.paint?.colors === now.paint.colors && before.paint?.strokes === now.paint.strokes;
+      if (samePaint && JSON.stringify([before.shape, before.limbs]) === JSON.stringify([now.shape, now.limbs])) return false;
+      this.history.push(before); if (this.history.length > 40) this.history.shift(); this.future = []; return true;
+    }
+    restore(state) {
+      this.body.shape = clone(state.shape); this.body.grab = null; this.body.history = [];
+      this.limbs.items = copyData(state.limbs); this.limbs.selected = state.selected; this.limbs.grab = null;
+      this.limbs.nextId = Math.max(this.limbs.nextId, ...state.limbs.map(limb => limb.id + 1));
+      this.paint.restore(state.paint);
     }
     undo() {
       const previous = this.history.pop(); if (!previous) return false;
-      this.body.shape = clone(previous.shape); this.body.grab = null; this.body.history = [];
-      this.limbs.items = copyData(previous.limbs); this.limbs.selected = previous.selected; this.limbs.grab = null; return true;
+      this.future.push(this.snapshot()); this.restore(previous); return true;
+    }
+    redo() {
+      const next = this.future.pop(); if (!next) return false;
+      this.history.push(this.snapshot()); this.restore(next); return true;
     }
     reset() {
       const before = this.snapshot(); this.body.shape = clone(REST); this.body.grab = null;
-      this.limbs.items = []; this.limbs.selected = null; this.limbs.grab = null; return this.remember(before);
+      this.limbs.items = []; this.limbs.selected = null; this.limbs.grab = null; this.paint.restore(null); return this.remember(before);
+    }
+    export() { return { format: 'unnamed-creature-art', version: 1, state: this.snapshot() }; }
+    load(data) {
+      const state = validateArtwork(data), before = this.snapshot();
+      this.restore(state); this.remember(before);
     }
   }
 
   // Also used by the small, dependency-free numerical regression test.
-  globalThis.CreatureMotion = Object.freeze({ samplePose, makeContour, closedPath, blinkAt, SoftSculpt, validShape, safeFace, renderedOutline, SCULPT_LIMITS, attachment, limbGeometry, limbGeometries, LimbSystem, SculptSession });
+  globalThis.CreatureMotion = Object.freeze({ samplePose, makeContour, closedPath, blinkAt, SoftSculpt, validShape, safeFace, renderedOutline, SCULPT_LIMITS, attachment, limbGeometry, limbGeometries, LimbSystem, SculptSession, PaintState, bindPaintPoint, paintPoint, paintPath, validateArtwork });
   if (typeof document === 'undefined') return;
 
   const body = document.getElementById('body');
@@ -646,6 +813,13 @@ main {
   const widthControl = document.getElementById('width-control'), widthInput = document.getElementById('limb-width');
   const deleteButton = document.getElementById('delete-limb'), hint = document.getElementById('interaction-hint');
   const limbNodes = new Map(), limbMotion = new Map();
+  const paintMode = document.getElementById('paint-mode'), paintPanel = document.getElementById('paint-panel');
+  const redoButton = document.getElementById('redo'), paintTarget = document.getElementById('paint-target');
+  const paintColor = document.getElementById('paint-color'), brushSize = document.getElementById('brush-size');
+  const brushTool = document.getElementById('brush-tool'), eraserTool = document.getElementById('eraser-tool');
+  const fillLimb = document.getElementById('fill-limb'), artFile = document.getElementById('art-file'), artStatus = document.getElementById('art-status');
+  const paintDefs = document.querySelector('.scene defs'), paintViews = new Map();
+  let liveGeometries = new Map(), paintErase = false, autosaveTimer = null;
   let workspace = { left: 0, top: 80, right: 640, bottom: 560 };
   let camera = { x: 0, y: 80, width: 640, height: 480 };
   let mode = 'body', widthBefore = null;
@@ -708,6 +882,7 @@ main {
     }
     body.setAttribute('d', closedPath(points));
     renderLimbs(pose);
+    renderPaint();
     creature.setAttribute('transform', `translate(${320 + pose.drift} ${428 - pose.lift}) rotate(${pose.tilt})`);
     fitWorkspace(pose);
     floor.setAttribute('cx', 320 + pose.drift * .3);
@@ -740,7 +915,7 @@ main {
     }
     const pose = samplePose(time, amount);
     livePose = pose;
-    if (drag?.moved) moveDrag(dragPoint(drag.clientX, drag.clientY, pose));
+    if (drag?.moved && drag.kind !== 'paint') moveDrag(dragPoint(drag.clientX, drag.clientY, pose));
     integrate(dt, makeContour(time, pose, amount, sculpt.shape));
     integrateLimbs(dt);
     render(pose);
@@ -749,13 +924,24 @@ main {
 
   function updateControls() {
     undoButton.disabled = session.history.length === 0 && !drag;
-    resetButton.disabled = !sculpt.changed && limbs.items.length === 0;
+    redoButton.disabled = session.future.length === 0;
+    paintMode.setAttribute('aria-pressed', String(mode === 'paint'));
+    paintPanel.hidden = mode !== 'paint';
+    document.querySelector('main').classList.toggle('is-painting', mode === 'paint');
+    resetButton.disabled = !sculpt.changed && limbs.items.length === 0 && !session.paint.strokes.length && Object.values(session.paint.colors).every(color => color === '#ffffff');
     bodyMode.setAttribute('aria-pressed', String(mode === 'body'));
     limbMode.setAttribute('aria-pressed', String(mode === 'limb'));
-    widthControl.hidden = deleteButton.hidden = !limbs.active;
+    widthControl.hidden = deleteButton.hidden = !limbs.active || mode === 'paint';
+    fillLimb.disabled = !limbs.active;
+    const options = ['auto', 'body', ...limbs.items.map(limb => partKey(limb.id))];
+    if (Array.from(paintTarget.options, o => o.value).join(',') !== options.join(',')) {
+      const chosen = paintTarget.value;
+      paintTarget.replaceChildren(...options.map(key => { const option = document.createElement('option'); option.value = key; option.textContent = key === 'auto' ? '自动识别部位' : key === 'body' ? '身体' : `肢体 / 分支 ${key.split(':')[1]}`; return option; }));
+      paintTarget.value = options.includes(chosen) ? chosen : 'auto';
+    }
     if (limbs.active) widthInput.value = limbs.active.width;
     deleteButton.title = '删除选中肢体及其子分支，可撤销';
-    hint.textContent = limbs.active ? `${mode === 'limb' ? '边缘外拉可再分枝' : '切换「长出肢体」可分枝'} · 圆点调长短和弯曲 · 滑块调粗细 · 删除会移除整支` : mode === 'limb' ? '从身体或已有肢体边缘向外拖，继续长出分枝 · 单击肢体可选中' : '拖动身体揉捏 · 切换「长出肢体」可从身体或肢体边缘拉出分枝';
+    hint.textContent = mode === 'paint' ? '按住拖动画，点按画圆点 · 笔迹限制在所画部位内 · Ctrl+Z 撤销，Ctrl+Shift+Z 重做' : limbs.active ? `${mode === 'limb' ? '边缘外拉可再分枝' : '切换「长出肢体」可分枝'} · 圆点调长短和弯曲 · 滑块调粗细 · 删除会移除整支` : mode === 'limb' ? '从身体或已有肢体边缘向外拖，继续长出分枝 · 单击肢体可选中' : '拖动身体揉捏 · 切换「长出肢体」可从身体或肢体边缘拉出分枝';
   }
   function svgNode(tag, attributes) {
     const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -765,7 +951,10 @@ main {
   function fitWorkspace(pose) {
     if (!limbs.items.length) workspace = { left: 0, top: 80, right: 640, bottom: 560 };
     else if (!drag) {
-      const box = document.getElementById('skin').getBBox(), angle = pose.tilt * Math.PI / 180;
+      const boxes = [body, ...limbNodes.values()].map(node => node.getBBox());
+      const left = Math.min(...boxes.map(b => b.x)), top = Math.min(...boxes.map(b => b.y));
+      const box = { x: left, y: top, width: Math.max(...boxes.map(b => b.x + b.width)) - left, height: Math.max(...boxes.map(b => b.y + b.height)) - top };
+      const angle = pose.tilt * Math.PI / 180;
       for (const x of [box.x, box.x + box.width]) for (const y of [box.y, box.y + box.height]) {
         const px = 320 + pose.drift + x * Math.cos(angle) - y * Math.sin(angle);
         const py = 428 - pose.lift + x * Math.sin(angle) + y * Math.cos(angle);
@@ -795,13 +984,14 @@ main {
   }
   function renderLimbs() {
     const geometries = limbGeometries(limbs.items, points, limbMotion);
+    liveGeometries = geometries;
     const ids = new Set(limbs.items.map(item => item.id));
-    for (const [id, node] of limbNodes) if (!ids.has(id)) { node.remove(); limbNodes.delete(id); }
+    for (const [id, node] of limbNodes) if (!ids.has(id)) { node.parentElement.remove(); limbNodes.delete(id); }
     if (!limbs.active && handleLayer.childElementCount) handleLayer.replaceChildren();
     for (const limb of limbs.items) {
       if (!limbNodes.has(limb.id)) {
         const node = svgNode('path', { class: 'limb-skin', 'data-limb': limb.id, 'aria-label': `肢体 ${limb.id}` });
-        limbLayer.append(node); limbNodes.set(limb.id, node);
+        const group = svgNode('g', { 'data-limb-part': limb.id }); group.append(node); limbLayer.append(group); limbNodes.set(limb.id, node);
       }
       const geometry = geometries.get(limb.id);
       if (!geometry) continue;
@@ -845,6 +1035,11 @@ main {
   }
   scene.addEventListener('pointerdown', event => {
     if (event.button !== 0 || drag) return;
+    if (mode === 'paint') {
+      event.preventDefault();
+      drag = { kind: 'paint', before: session.snapshot(), id: event.pointerId, clientX: event.clientX, clientY: event.clientY, moved: true, brush: { color: paintColor.value, width: Number(brushSize.value), erase: paintErase } };
+      scene.setPointerCapture(event.pointerId); scene.classList.add('is-painting-stroke'); paintAt(event.clientX, event.clientY); updateControls(); return;
+    }
     const target = event.target.closest('[data-limb]');
     const point = target || mode === 'limb' ? displayPoint(event.clientX, event.clientY) : modelPoint(event.clientX, event.clientY);
     const before = session.snapshot();
@@ -874,12 +1069,24 @@ main {
   scene.addEventListener('pointermove', event => {
     if (!drag || event.pointerId !== drag.id) return;
     drag.clientX = event.clientX; drag.clientY = event.clientY;
+    if (drag.kind === 'paint') {
+      event.preventDefault();
+      const samples = event.getCoalescedEvents?.();
+      for (const sample of samples?.length ? samples : [event]) paintAt(sample.clientX, sample.clientY);
+      return;
+    }
     if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 3) drag.moved = true;
     if (drag.moved) moveDrag(dragPoint(event.clientX, event.clientY));
   });
   function finishDrag(event, recoil = true) {
     if (!drag || (event && event.pointerId !== drag.id)) return;
     const { id, kind, before } = drag;
+    if (kind === 'paint') {
+      paintAt(drag.clientX, drag.clientY); session.paint.end(); commitArtwork(before);
+      drag = null; scene.classList.remove('is-painting-stroke');
+      if (scene.hasPointerCapture(id)) scene.releasePointerCapture(id);
+      updateControls(); return;
+    }
     if (drag.moved) moveDrag(dragPoint(drag.clientX, drag.clientY));
     if (kind === 'body') {
       const bodyBefore = sculpt.grab?.before;
@@ -898,6 +1105,7 @@ main {
       }
       else {
         const changed = limbs.release(), motion = limbMotion.get(limb?.id);
+        if (grab.kind === 'create') session.paint.setColor(partKey(limb.id), session.paint.color(partKey(limb.parentId)));
         if (changed && recoil && motion) {
           for (const [i, [key, axis]] of [['tip','x'],['tip','y'],['bend','x'],['bend','y']].entries()) {
             motion.velocity[i] -= clamp((limb[key][axis] - grab.before[key][axis]) * .9, -110, 110) * amount;
@@ -905,7 +1113,7 @@ main {
         }
       }
     }
-    session.remember(before);
+    commitArtwork(before);
     drag = null; scene.classList.remove('is-sculpting');
     if (scene.hasPointerCapture(id)) scene.releasePointerCapture(id);
     updateControls();
@@ -914,24 +1122,155 @@ main {
   scene.addEventListener('pointercancel', finishDrag);
   scene.addEventListener('lostpointercapture', finishDrag);
   function softenMomentum() { recoilUntil = -Infinity; velocities.forEach(v => { v.x *= .2; v.y *= .2; }); }
-  function undo() { finishWidth(); finishDrag(null, false); session.undo(); limbMotion.clear(); softenMomentum(); updateControls(); }
-  function reset() { finishWidth(); finishDrag(null, false); session.reset(); limbMotion.clear(); softenMomentum(); updateControls(); }
+  function undo() { finishWidth(); finishDrag(null, false); if (session.undo()) autosave(); limbMotion.clear(); softenMomentum(); updateControls(); }
+  function redo() { finishWidth(); finishDrag(null, false); if (session.redo()) autosave(); limbMotion.clear(); softenMomentum(); updateControls(); }
+  function reset() { finishWidth(); finishDrag(null, false); session.reset(); autosave(); limbMotion.clear(); softenMomentum(); updateControls(); }
   undoButton.addEventListener('click', undo);
+  redoButton.addEventListener('click', redo);
   resetButton.addEventListener('click', reset);
-  function setMode(value) { finishWidth(); finishDrag(); mode = value; limbs.selected = null; updateControls(); }
+  function setMode(value) { finishWidth(); finishDrag(); mode = value; if (value !== 'paint') limbs.selected = null; updateControls(); }
   bodyMode.addEventListener('click', () => setMode('body'));
   limbMode.addEventListener('click', () => setMode('limb'));
-  function finishWidth() { if (widthBefore) { session.remember(widthBefore); widthBefore = null; updateControls(); } }
+  paintMode.addEventListener('click', () => setMode('paint'));
+  function finishWidth() { if (widthBefore) { commitArtwork(widthBefore); widthBefore = null; updateControls(); } }
   widthInput.addEventListener('input', () => { widthBefore ||= session.snapshot(); limbs.setWidth(widthInput.value); });
   widthInput.addEventListener('change', finishWidth);
   widthInput.addEventListener('blur', finishWidth);
-  function deleteSelected() { finishWidth(); finishDrag(); const before = session.snapshot(); if (limbs.removeSelected()) session.remember(before); updateControls(); }
+  function deleteSelected() { finishWidth(); finishDrag(); const before = session.snapshot(); if (limbs.removeSelected()) { session.paint.prune(limbs.items.map(limb => limb.id)); commitArtwork(before); } updateControls(); }
   deleteButton.addEventListener('click', deleteSelected);
   document.addEventListener('keydown', event => {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); undo(); }
+    if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === 'y' || (event.shiftKey && event.key.toLowerCase() === 'z'))) { event.preventDefault(); redo(); }
+    else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); undo(); }
     if (event.key === 'Escape') { finishDrag(); limbs.selected = null; updateControls(); }
-    if ((event.key === 'Delete' || event.key === 'Backspace') && event.target.tagName !== 'INPUT') { event.preventDefault(); deleteSelected(); }
+    if ((event.key === 'Delete' || event.key === 'Backspace') && mode !== 'paint' && !['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName)) { event.preventDefault(); deleteSelected(); }
   });
+  function paintParts() {
+    return [{ key: 'body', controls: points, node: body }, ...limbs.items.flatMap(limb => {
+      const geometry = liveGeometries.get(limb.id), node = limbNodes.get(limb.id);
+      return geometry && node ? [{ key: partKey(limb.id), controls: geometry.surface, node }] : [];
+    })];
+  }
+  function ensurePaintView(part) {
+    if (paintViews.has(part.key)) return paintViews.get(part.key);
+    const safe = part.key.replace(':', '-');
+    if (!part.node.id) part.node.id = `shape-${safe}`;
+    const clip = svgNode('clipPath', { id: `clip-${safe}`, clipPathUnits: 'userSpaceOnUse' });
+    clip.append(svgNode('use', { href: `#${part.node.id}` }));
+    const masks = svgNode('g', {}), group = svgNode('g', { class: 'paint-layer', 'data-painted-part': part.key, 'clip-path': `url(#clip-${safe})` });
+    paintDefs.append(clip, masks); part.node.after(group);
+    const view = { clip, masks, group, records: [], strokes: null };
+    paintViews.set(part.key, view); return view;
+  }
+  function renderPaint() {
+    const parts = paintParts(), keys = new Set(parts.map(part => part.key));
+    for (const [key, view] of paintViews) if (!keys.has(key)) { view.clip.remove(); view.masks.remove(); view.group.remove(); paintViews.delete(key); }
+    for (const part of parts) {
+      part.node.setAttribute('fill', session.paint.color(part.key));
+      const view = ensurePaintView(part);
+      if (view.strokes !== session.paint.strokes) {
+        view.strokes = session.paint.strokes; view.records = []; view.group.replaceChildren(); view.masks.replaceChildren();
+        for (const stroke of session.paint.strokes) if (stroke.part === part.key) {
+          const node = svgNode('path', { class: stroke.erase ? 'eraser-path' : 'paint-stroke', 'data-stroke': stroke.id, fill: 'none', stroke: stroke.erase ? '#000000' : stroke.color, 'stroke-width': stroke.width, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+          let mask = null, white = null;
+          if (stroke.erase) {
+            const id = `erase-${part.key.replace(':', '-')}-${stroke.id}`;
+            mask = svgNode('mask', { id, maskUnits: 'userSpaceOnUse', maskContentUnits: 'userSpaceOnUse', 'mask-type': 'luminance' });
+            white = svgNode('rect', { fill: '#ffffff' }); mask.append(white, node); view.masks.append(mask);
+            const previous = svgNode('g', { mask: `url(#${id})` });
+            previous.append(...Array.from(view.group.childNodes)); view.group.append(previous);
+          } else view.group.append(node);
+          view.records.push({ stroke, node, mask, white });
+        }
+      }
+      const xs = part.controls.map(p => p.x), ys = part.controls.map(p => p.y);
+      const bounds = { x: Math.min(...xs) - 80, y: Math.min(...ys) - 80, width: Math.max(...xs) - Math.min(...xs) + 160, height: Math.max(...ys) - Math.min(...ys) + 160 };
+      for (const record of view.records) {
+        record.node.setAttribute('d', paintPath(record.stroke.points, part.controls));
+        if (record.mask) for (const [key, value] of Object.entries(bounds)) { record.mask.setAttribute(key, value); record.white.setAttribute(key, value); }
+      }
+    }
+  }
+  function paintAt(clientX, clientY) {
+    const parts = paintParts();
+    const previous = drag.lastPaint || { x: clientX, y: clientY };
+    const count = Math.max(1, Math.ceil(Math.hypot(clientX - previous.x, clientY - previous.y) / Math.max(2, drag.brush.width * .18)));
+    for (let i = 1; i <= count; i++) {
+      const point = displayPoint(previous.x + (clientX - previous.x) * i / count, previous.y + (clientY - previous.y) * i / count);
+      const hit = new DOMPoint(point.x, point.y);
+      const part = parts.slice().reverse().find(part => (paintTarget.value === 'auto' || part.key === paintTarget.value) && part.node.isPointInFill(hit));
+      session.paint.sample(part?.key, point, part?.controls, drag.brush);
+      if (part) limbs.selected = part.key === 'body' ? null : Number(part.key.split(':')[1]);
+    }
+    drag.lastPaint = { x: clientX, y: clientY };
+  }
+  function commitArtwork(before) { const changed = session.remember(before); if (changed) autosave(); return changed; }
+  function autosave() {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => {
+      try { localStorage.setItem('unnamed-creature-art-v1', JSON.stringify(session.export())); artStatus.textContent = '已自动保存到此浏览器'; }
+      catch { artStatus.textContent = '浏览器自动保存不可用，请点击“保存作品”下载备份。'; }
+    }, 400);
+  }
+  function refreshArtwork() {
+    limbMotion.clear(); workspace = { left: 0, top: 80, right: 640, bottom: 560 };
+    const target = makeContour(time, livePose, amount, sculpt.shape);
+    points.forEach((p, i) => { p.x = target[i].x; p.y = target[i].y; velocities[i].x = velocities[i].y = 0; });
+    lastSafePoints = clone(points); lastSafeFace = safeFace(points) || { x: 0, y: -120 };
+    updateControls(); render(livePose);
+  }
+  function setPaintTool(erase) {
+    paintErase = erase;
+    brushTool.setAttribute('aria-pressed', String(!erase)); eraserTool.setAttribute('aria-pressed', String(erase));
+  }
+  function updateSwatches() {
+    for (const button of document.querySelectorAll('.swatch')) button.setAttribute('aria-pressed', String(button.dataset.color === paintColor.value));
+  }
+  function fillParts(keys) {
+    finishWidth(); finishDrag(null, false);
+    const before = session.snapshot(); for (const key of keys) session.paint.setColor(key, paintColor.value);
+    commitArtwork(before); updateControls();
+  }
+  brushTool.addEventListener('click', () => setPaintTool(false));
+  eraserTool.addEventListener('click', () => setPaintTool(true));
+  paintColor.addEventListener('input', updateSwatches);
+  brushSize.addEventListener('input', () => { document.getElementById('brush-size-value').textContent = brushSize.value; });
+  paintTarget.addEventListener('change', () => { limbs.selected = paintTarget.value.startsWith('limb:') ? Number(paintTarget.value.split(':')[1]) : null; updateControls(); });
+  document.getElementById('fill-body').addEventListener('click', () => fillParts(['body']));
+  fillLimb.addEventListener('click', () => { if (limbs.active) fillParts([partKey(limbs.selected)]); });
+  document.getElementById('fill-all').addEventListener('click', () => fillParts(['body', ...limbs.items.map(limb => partKey(limb.id))]));
+  const palettes = [
+    ['多巴胺亮色', ['#ff477e', '#ff9f1c', '#ffd60a', '#23c9a2', '#338aff', '#9b5de5']],
+    ['马卡龙', ['#f8b9cf', '#ffd9b3', '#fff0ad', '#bce8d4', '#c1dcfa', '#d9c7ef']],
+    ['荧光', ['#ff00b8', '#ff5c00', '#dcff00', '#39ff14', '#00eaff', '#b000ff']],
+  ];
+  for (const [name, colors] of palettes) {
+    const row = document.createElement('div'); row.className = 'swatch-row';
+    const label = document.createElement('small'); label.textContent = name; row.append(label);
+    for (const color of colors) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'swatch'; button.dataset.color = color;
+      button.setAttribute('aria-label', `${name} ${color}`); button.setAttribute('aria-pressed', 'false'); button.style.background = color;
+      button.addEventListener('click', () => { paintColor.value = color; setPaintTool(false); updateSwatches(); }); row.append(button);
+    }
+    document.getElementById('color-swatches').append(row);
+  }
+  document.getElementById('save-art').addEventListener('click', () => {
+    finishWidth(); finishDrag(null, false);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(session.export())], { type: 'application/json' }));
+    const link = document.createElement('a'); link.href = url; link.download = '未名生物-作品.json'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000); artStatus.textContent = '已下载作品文件，可用“打开作品”恢复。';
+  });
+  document.getElementById('open-art').addEventListener('click', () => artFile.click());
+  artFile.addEventListener('change', async () => {
+    const file = artFile.files?.[0]; if (!file) return;
+    finishWidth(); finishDrag(null, false);
+    try {
+      if (file.size > 64 * 1024 * 1024) throw new Error('作品文件过大，请选择 64 MB 以内的文件。');
+      const data = JSON.parse(await file.text()); finishWidth(); finishDrag(null, false); session.load(data); refreshArtwork(); autosave(); artStatus.textContent = '作品已恢复，身体、分枝、底色和涂鸦都已载入。';
+    } catch (error) { artStatus.textContent = error instanceof SyntaxError ? '无法读取作品 JSON，当前作品未更改。' : error.message; }
+    artFile.value = '';
+  });
+
+  try { const saved = localStorage.getItem('unnamed-creature-art-v1'); if (saved) { session.restore(validateArtwork(JSON.parse(saved))); refreshArtwork(); artStatus.textContent = '已恢复此浏览器中的作品'; } } catch { /* Manual files remain available when browser storage is blocked. */ }
   updateControls();
 
   // Pausing the simulation clock avoids a jump or fast-forward after a hidden tab resumes.

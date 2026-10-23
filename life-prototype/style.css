@@ -78,3 +78,34 @@ main {
 .limb-handle.bend { fill: #e4deee; }
 .limb-guide { stroke: #b7aec7; stroke-width: 1; stroke-dasharray: 3 5; fill: none; pointer-events: none; vector-effect: non-scaling-stroke; }
 @media (max-width: 600px) { #interaction-hint { bottom: 126px; font-size: 11px; } .tools button { padding: 7px 10px; } }
+.paint-panel { position: fixed; top: 20px; right: 20px; width: 238px; max-height: calc(100svh - 150px); overflow: auto; padding: 20px; background: #fcfbf8f5; border: 1px solid #e7e4e0; border-radius: 22px; color: #69636a; font: 12px/1.6 system-ui, sans-serif; }
+.paint-panel[hidden] { display: none; }
+.paint-panel h1 { margin: 0; font-size: 18px; font-weight: 550; color: #514c55; }
+.paint-panel p { margin: 5px 0 16px; color: #96908a; }
+.paint-panel button { border: 1px solid #e5e0e8; border-radius: 12px; background: #fff; padding: 7px 10px; color: #69636a; font: inherit; cursor: pointer; }
+.paint-panel button[aria-pressed="true"] { background: #eee8f6; border-color: #c7b6db; }
+.paint-panel button:disabled { opacity: .4; cursor: default; }
+.paint-tool-row, .fill-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
+.paint-label { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0 8px; }
+#paint-color { width: 70px; height: 34px; padding: 2px; border: 1px solid #e7e1e9; border-radius: 10px; background: #fff; cursor: pointer; }
+#brush-size { width: 100%; accent-color: #ab88bf; }
+#paint-target { width: 100%; border: 1px solid #e7e1e9; background: #fff; border-radius: 10px; padding: 8px; color: #69636a; }
+.swatch-row { margin-top: 12px; }
+.swatch-row small { display: block; margin-bottom: 5px; color: #96908a; }
+.swatch-row .swatch { width: 25px; height: 25px; padding: 0; margin: 0 5px 0 0; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #e7e1e9; }
+.swatch-row .swatch[aria-pressed="true"] { outline: 2px solid #82738d; outline-offset: 1px; }
+.paint-layer { pointer-events: none; }
+main.is-painting { padding-right: 280px; }
+main.is-painting .scene { width: min(calc(100vw - 310px), 100svh, 760px); cursor: crosshair; }
+main.is-painting #body, main.is-painting .limb-skin { cursor: crosshair; }
+main.is-painting #limb-controls { display: none; }
+#art-status { position: fixed; top: 15px; left: 20px; max-width: min(440px, calc(100vw - 40px)); color: #82738d; font: 12px/1.6 system-ui, sans-serif; pointer-events: none; }
+@media (max-width: 760px) {
+  main.is-painting { padding-right: 0; }
+  main.is-painting .scene { width: min(96vw, 100svh, 760px); }
+  .paint-panel { top: 10px; right: 12px; width: calc(100vw - 24px); max-height: 210px; padding: 12px; border-radius: 16px; }
+  .paint-panel h1 { font-size: 15px; }
+  .paint-panel p { margin-bottom: 8px; }
+  #art-status { top: auto; bottom: 145px; }
+  #interaction-hint { bottom: 175px; }
+}

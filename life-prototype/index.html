@@ -39,13 +39,38 @@
       <div class="tools" role="group" aria-label="塑形操作">
         <button id="body-mode" type="button" aria-pressed="true">揉捏身体</button>
         <button id="limb-mode" type="button" aria-pressed="false">长出肢体</button>
+        <button id="paint-mode" type="button" aria-pressed="false">自由涂色</button>
         <span aria-hidden="true"></span>
-        <button id="undo" type="button" disabled title="撤销上一次塑形（Ctrl+Z / ⌘Z）">撤销</button>
+        <button id="undo" type="button" disabled title="撤销上一次操作（Ctrl+Z / ⌘Z）">撤销</button>
+        <button id="redo" type="button" disabled title="重做（Ctrl+Shift+Z / Ctrl+Y）">重做</button>
         <span aria-hidden="true"></span>
-        <button id="reset" type="button" disabled title="恢复初始形状，仍可撤销">重置</button>
+        <button id="reset" type="button" disabled title="恢复初始作品，清除形态和涂色，仍可撤销">重置</button>
         <label id="width-control" hidden>粗细 <input id="limb-width" type="range" min="5" max="42" step="1" value="17" aria-label="肢体粗细" /></label>
         <button id="delete-limb" type="button" hidden>删除肢体</button>
+        <button id="save-art" type="button" title="下载可继续编辑的 JSON 作品文件">保存作品</button>
+        <button id="open-art" type="button" title="从 JSON 文件恢复完整作品">打开作品</button>
       </div>
+      <aside id="paint-panel" class="paint-panel" aria-label="自由涂色工具" hidden>
+        <h1>给它一点颜色</h1>
+        <p>笔迹随身体和分枝一起动</p>
+        <div class="paint-tool-row">
+          <button id="brush-tool" type="button" aria-pressed="true">画笔</button>
+          <button id="eraser-tool" type="button" aria-pressed="false">橡皮擦</button>
+        </div>
+        <label class="paint-label">自由选色 <input id="paint-color" type="color" value="#ff6695" aria-label="画笔颜色" /></label>
+        <div id="color-swatches" aria-label="预设色卡"></div>
+        <label class="paint-label">笔刷大小 <output id="brush-size-value">18</output><input id="brush-size" type="range" min="2" max="70" value="18" aria-label="画笔粗细" /></label>
+        <label class="paint-label" for="paint-target">绘画部位</label>
+        <select id="paint-target" aria-label="绘画部位"><option value="auto">自动识别部位</option><option value="body">身体</option></select>
+        <div class="fill-actions">
+          <button id="fill-body" type="button">身体底色</button>
+          <button id="fill-limb" type="button" disabled>所选肢体底色</button>
+          <button id="fill-all" type="button">全身底色</button>
+        </div>
+        <p>底色独立于笔迹。橡皮擦只擦涂鸦，擦过的位置还能重新画。</p>
+      </aside>
+      <input id="art-file" type="file" accept=".json,application/json" hidden aria-label="打开作品文件" />
+      <p id="art-status" role="status" aria-live="polite"></p>
       <p id="interaction-hint" aria-live="polite">拖动身体揉捏 · 切换「长出肢体」可从边缘拉出新肢体</p>
     </main>
   </body>
