@@ -449,3 +449,49 @@ test('节外生枝：肢体上再长分支，三级连接随父段移动，子�
   await page.keyboard.press('Control+z'); await expect(page.locator('#limbs path')).toHaveCount(3);
   expect(errors).toEqual([]);
 });
+
+test('向内拐：末端穿过根部朝内回弯，实时跟手，松开保留且可撤销', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(entry);
+  await page.getByRole('button', { name: '长出肢体', exact: true }).click();
+  const from = await page.locator('#body').evaluate(p => {
+    let best = p.getPointAtLength(0);
+    for (let i = 1; i < 400; i++) { const q = p.getPointAtLength(p.getTotalLength() * i / 400); if (q.x < best.x) best = q; }
+    const q = new DOMPoint(best.x, best.y).matrixTransform(p.getScreenCTM()); return { x: q.x, y: q.y };
+  });
+  await page.mouse.move(from.x, from.y); await page.mouse.down();
+  await page.mouse.move(from.x - 110, from.y - 100, { steps: 25 }); await page.mouse.up();
+  await page.waitForTimeout(1200);
+  const start = await page.locator('.limb-handle.tip').evaluate(p => {
+    const root = document.querySelector('.limb-guide').getAttribute('d').match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi).map(Number);
+    const matrix = p.getScreenCTM(), q = new DOMPoint(+p.getAttribute('cx'), +p.getAttribute('cy')).matrixTransform(matrix);
+    const target = new DOMPoint(root[0] + 65, root[1] - 160).matrixTransform(matrix);
+    return { x: q.x, y: q.y, targetX: target.x, targetY: target.y };
+  });
+  await page.mouse.move(start.x, start.y); await page.mouse.down();
+  await expect(page.locator('.scene')).toHaveClass(/is-sculpting/);
+  await page.mouse.move(start.targetX, start.targetY, { steps: 45 });
+  await page.waitForTimeout(450);
+  const held = await page.locator('.limb-handle.tip').evaluate(p => {
+    const q = new DOMPoint(+p.getAttribute('cx'), +p.getAttribute('cy')).matrixTransform(p.getScreenCTM()); return { x: q.x, y: q.y };
+  });
+  expect(Math.hypot(held.x - start.targetX, held.y - start.targetY)).toBeLessThan(14);
+  await page.mouse.up(); await page.waitForTimeout(1600);
+  async function relativeTip() {
+    return page.locator('.limb-handle.tip').evaluate(p => {
+      const root = document.querySelector('.limb-guide').getAttribute('d').match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi).map(Number);
+      return { x: +p.getAttribute('cx') - root[0], y: +p.getAttribute('cy') - root[1] };
+    });
+  }
+  const inside = await relativeTip();
+  expect(inside.x).toBeGreaterThan(40);
+  expect(inside.y).toBeLessThan(-120);
+  await expect(page.locator('#limbs path')).toHaveCount(1);
+  expect(await page.locator('#limbs path').getAttribute('d')).not.toMatch(/NaN|Infinity/);
+  await page.screenshot({ path: 'test-results/life-inward-hook.png' });
+  await page.keyboard.press('Control+z');
+  await expect.poll(async () => (await relativeTip()).x).toBeLessThan(-60);
+  await expect(page.locator('#limbs path')).toHaveCount(1);
+  expect(errors).toEqual([]);
+});

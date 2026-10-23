@@ -463,20 +463,30 @@ main {
   }
   const fromLocal = (root, p) => ({ x: root.x + root.nx * p.x + root.tx * p.y, y: root.y + root.ny * p.x + root.ty * p.y });
   const toLocal = (root, p) => ({ x: (p.x - root.x) * root.nx + (p.y - root.y) * root.ny, y: (p.x - root.x) * root.tx + (p.y - root.y) * root.ty });
+  const limbBendLimit = limb => Math.max(60, limb.width * 3, Math.hypot(limb.tip.x, limb.tip.y) * 1.25);
   function limbGeometry(limb, shape, pose = limb, parentWidth = null) {
     const root = attachment(shape, limb.slot), tip = fromLocal(root, pose.tip);
     const length = Math.hypot(pose.tip.x, pose.tip.y);
     const depth = parentWidth === null ? limb.width * .8 + 12 : Math.max(2, Math.min(limb.width * .8 + 12, parentWidth * .55));
     const start = fromLocal(root, { x: -depth, y: 0 });
-    const c1 = fromLocal(root, { x: length * .34, y: 0 });
-    const c2 = fromLocal(root, { x: pose.tip.x * .68 + pose.bend.x, y: pose.tip.y * .68 + pose.bend.y });
+    // Turning back past the root needs room for a rounded hook. A fixed departure
+    // tangent followed by a collinear reversed tip would otherwise make a cusp.
+    const curl = ease(-pose.tip.x / Math.max(30, length * .65));
+    const side = limb.curlSide || Math.sign(pose.tip.y) || 1;
+    const c1 = fromLocal(root, { x: length * .34 + (length * .35 + limb.width) * curl, y: 0 });
+    const control = { x: pose.tip.x * .68 + pose.bend.x + (length * .15 + limb.width) * curl, y: pose.tip.y * .68 + pose.bend.y + side * (length * .75 + limb.width * 2) * curl };
+    const fold = ease(-control.x / Math.max(30, length * .65)) * (1 - ease(Math.abs(control.y) / (length * .35 + limb.width * 2)));
+    control.y += side * (length * .5 + limb.width * 2) * fold;
+    const c2 = fromLocal(root, control);
     const left = [], right = [];
     let endNormal;
     for (let i = 0; i <= 18; i++) {
       const t = i / 18, m = 1 - t;
       const p = { x: m ** 3 * start.x + 3 * m * m * t * c1.x + 3 * m * t * t * c2.x + t ** 3 * tip.x, y: m ** 3 * start.y + 3 * m * m * t * c1.y + 3 * m * t * t * c2.y + t ** 3 * tip.y };
-      const dx = 3 * m * m * (c1.x - start.x) + 6 * m * t * (c2.x - c1.x) + 3 * t * t * (tip.x - c2.x);
-      const dy = 3 * m * m * (c1.y - start.y) + 6 * m * t * (c2.y - c1.y) + 3 * t * t * (tip.y - c2.y);
+      let dx = 3 * m * m * (c1.x - start.x) + 6 * m * t * (c2.x - c1.x) + 3 * t * t * (tip.x - c2.x);
+      let dy = 3 * m * m * (c1.y - start.y) + 6 * m * t * (c2.y - c1.y) + 3 * t * t * (tip.y - c2.y);
+      if (Math.hypot(dx, dy) < 1e-6) { dx = tip.x - c1.x; dy = tip.y - c1.y; }
+      if (Math.hypot(dx, dy) < 1e-6) { dx = root.nx; dy = root.ny; }
       const norm = Math.hypot(dx, dy) || 1, nx = -dy / norm, ny = dx / norm;
       const radius = limb.width * (.62 + .78 * (1 - t) ** 3);
       left.push({ x: p.x + nx * radius, y: p.y + ny * radius });
@@ -509,8 +519,9 @@ main {
     const bend = { x: (start.x + 3 * c1.x + 3 * c2.x + tip.x) / 8, y: (start.y + 3 * c1.y + 3 * c2.y + tip.y) / 8 };
     // Child roots use the very same spline as the visible skin, with outward
     // normals. The tube contour has the opposite winding to the body contour.
-    const signedArea = outline.reduce((sum, p, i) => { const q = outline[(i + 1) % outline.length]; return sum + p.x * q.y - p.y * q.x; }, 0);
-    const surface = signedArea < 0 ? outline.slice().reverse() : outline;
+    // Keep material slots stable even when a limb curls across itself. Choosing
+    // winding from its changing signed area could flip every child attachment.
+    const surface = outline.slice().reverse();
     return { root, tip, bend, outline, surface, path: closedPath(outline) };
   }
   function limbGeometries(items, shape, poses = new Map()) {
@@ -545,7 +556,7 @@ main {
       }
       if (closest.distance > 25) return false;
       const parent = this.items.find(item => item.id === parentId);
-      const limb = { id: this.nextId++, parentId, slot: closest.slot, tip: { x: 16, y: 0 }, bend: { x: 0, y: 0 }, width: parent ? clamp(parent.width * .6, 5, 17) : 17 };
+      const limb = { id: this.nextId++, parentId, slot: closest.slot, tip: { x: 16, y: 0 }, bend: { x: 0, y: 0 }, curlSide: 1, width: parent ? clamp(parent.width * .6, 5, 17) : 17 };
       this.items.push(limb); this.selected = limb.id;
       this.grab = { kind: 'create', id: limb.id, before: copyData(limb), origin: { ...point } };
       return true;
@@ -564,19 +575,20 @@ main {
       if (!surface) return;
       const root = attachment(surface, limb.slot), local = toLocal(root, point);
       if (this.grab.kind === 'bend') {
-        const origin = toLocal(root, this.grab.origin), max = Math.hypot(limb.tip.x, limb.tip.y) * .65;
+        const origin = toLocal(root, this.grab.origin), max = limbBendLimit(limb);
         let x = this.grab.before.bend.x + (local.x - origin.x) * 8 / 3;
         let y = this.grab.before.bend.y + (local.y - origin.y) * 8 / 3;
         const factor = Math.min(1, max / (Math.hypot(x, y) || 1));
         limb.bend = { x: x * factor, y: y * factor };
       } else {
-        // The root stays inside the body; the free end can sweep its outward half-plane.
-        let x = Math.max(12, local.x), y = local.y;
+        // Bound distance only, never the angle or sign of the normal component.
+        let x = local.x, y = local.y;
         const factor = Math.min(1, 300 / Math.hypot(x, y));
         limb.tip = { x: x * factor, y: y * factor };
-        const bendLimit = Math.hypot(limb.tip.x, limb.tip.y) * .65;
-        const bendScale = Math.min(1, bendLimit / (Math.hypot(limb.bend.x, limb.bend.y) || 1));
-        limb.bend = { x: limb.bend.x * bendScale, y: limb.bend.y * bendScale };
+        if (this.grab.kind === 'create' && x > 0 && Math.abs(y) > limb.width * .4) limb.curlSide = Math.sign(y);
+        const bend = this.grab.before.bend;
+        const bendScale = Math.min(1, limbBendLimit(limb) / (Math.hypot(bend.x, bend.y) || 1));
+        limb.bend = { x: bend.x * bendScale, y: bend.y * bendScale };
       }
     }
     release() {

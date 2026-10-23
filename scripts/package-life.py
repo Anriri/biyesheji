@@ -32,6 +32,7 @@ with ZipFile(destination, 'w', ZIP_DEFLATED) as archive:
         '点击“揉捏身体”回到原有身体塑形；所有身体和肢体操作共用撤销历史。\n'
         '节外生枝：在“长出肢体”模式，从已有肢体边缘再向外拖，可以连续长多级分支。\n'
         '单击已有肢体仍可选中，拖圆点进行编辑；删除会连同子分支删除，撤销可恢复整支。\n'
+        '自由回弯：末端圆点可以往身体方向拖，越过根部朝向；中间圆点可拉出更深的内弯。\n'
         '松开后会有自然的 Q 弹晃动，最后保留塑形结果，不会恢复原状。\n'
         '点击撤销或按 Ctrl+Z 回退，点击重置恢复初始形状。重置也能撤销。\n'
         '推荐 Chrome、Edge、Firefox 或 Safari。\n'
@@ -47,4 +48,5 @@ copyfile(destination, destination.with_name('unnamed-creature-life-sculpt-v3.zip
 copyfile(destination, destination.with_name('unnamed-creature-life-sculpt-v4.zip'))
 copyfile(destination, destination.with_name('unnamed-creature-life-limbs-v1.zip'))
 copyfile(destination, destination.with_name('unnamed-creature-life-branches-v1.zip'))
+copyfile(destination, destination.with_name('unnamed-creature-life-branches-v2.zip'))
 print(f'Standalone HTML and ZIP prepared: {destination} ({destination.stat().st_size:,} bytes)')

@@ -52,7 +52,7 @@ test('平滑面状肢体：根部深入主体、圆润封口、长度方向弯�
   }
   limbs.beginEdit(limb.id, 'tip', limbGeometry(limb, body.shape).tip);
   limbs.move({ x: root.x + root.nx * 16, y: root.y + root.ny * 16 }, body.shape); limbs.release();
-  assert.ok(Math.hypot(limb.bend.x, limb.bend.y) <= Math.hypot(limb.tip.x, limb.tip.y) * .65 + 1e-8, 'shortening a curved limb must not retain an oversized bend');
+  assert.ok(Math.hypot(limb.bend.x, limb.bend.y) <= Math.max(60, limb.width * 3, Math.hypot(limb.tip.x, limb.tip.y) * 1.25) + 1e-8, 'shortening still bounds excessive curvature, while allowing a rounded return loop');
   assert.doesNotMatch(limbGeometry(limb, body.shape).path, /NaN|Infinity/);
 });
 
@@ -136,4 +136,67 @@ test('分支删除和撤销：仅删除选中子树，不留下孤立段，不�
   assert.deepEqual(Array.from(limbs.items, item => item.id), [unrelated.id]);
   assert.ok(session.undo()); assert.equal(JSON.stringify(session.snapshot()), JSON.stringify(all));
   assert.equal(limbGeometries(limbs.items, body.shape).size, 5);
+});
+
+test('肢体向内回弯：末端连续转过整圈，穿过根部也不锁角，子分支材料位置不翻转', () => {
+  const body = new SoftSculpt(), limbs = new LimbSystem();
+  const parent = grow(limbs, body.shape, null, 24, 140);
+  const child = grow(limbs, body.shape, parent.id, 14, 75);
+  const root = attachment(body.shape, parent.slot);
+  limbs.beginEdit(parent.id, 'tip', limbGeometries(limbs.items, body.shape).get(parent.id).tip);
+  let previous, previousTip;
+  for (let degree = 0; degree <= 360; degree++) {
+    const angle = degree * Math.PI / 180;
+    const local = { x: Math.cos(angle) * 140, y: Math.sin(angle) * 140 };
+    const target = { x: root.x + root.nx * local.x + root.tx * local.y, y: root.y + root.ny * local.x + root.ty * local.y };
+    limbs.move(target, body.shape);
+    assert.ok(dist(parent.tip, local) < 1e-8, `endpoint blocked at ${degree} degrees`);
+    const geometries = limbGeometries(limbs.items, body.shape), g = geometries.get(parent.id), branch = geometries.get(child.id);
+    assert.ok(dist(g.tip, target) < 1e-8);
+    assert.ok(dist(branch.root, attachment(g.surface, child.slot)) < 1e-8);
+    if (previous) assert.ok(dist(previous, branch.root) < 12, 'a return bend must not flip child attachment slots');
+    if (previousTip) assert.ok(dist(previousTip, branch.tip) < 25, 'the child tangent must turn continuously with the returning parent');
+    assert.doesNotMatch(g.path + branch.path, /NaN|Infinity/);
+    previous = { ...branch.root };
+    previousTip = { ...branch.tip };
+  }
+  for (const x of [15, 5, 0, -5, -15]) {
+    limbs.move({ x: root.x + root.nx * x, y: root.y + root.ny * x }, body.shape);
+    assert.ok(Math.abs(parent.tip.x - x) < 1e-8, 'no hidden minimum radius around the root');
+    assert.doesNotMatch(limbGeometries(limbs.items, body.shape).get(parent.id).path, /NaN|Infinity/);
+  }
+  limbs.release();
+  // A chosen deep bend must not suddenly flip its return direction as the end
+  // passes from one side of the root to the other.
+  parent.bend = { x: -150, y: 0 };
+  limbs.beginEdit(parent.id, 'tip', limbGeometries(limbs.items, body.shape).get(parent.id).tip);
+  previous = null;
+  previousTip = null;
+  for (let degree = -90; degree <= 90; degree++) {
+    const angle = degree * Math.PI / 180;
+    limbs.move({ x: root.x + root.nx * Math.cos(angle) * 140 + root.tx * Math.sin(angle) * 140, y: root.y + root.ny * Math.cos(angle) * 140 + root.ty * Math.sin(angle) * 140 }, body.shape);
+    const current = limbGeometries(limbs.items, body.shape).get(child.id);
+    if (previous) assert.ok(dist(previous, current.root) < 12, 'an existing inward bend must retain its chosen turning side');
+    if (previousTip) assert.ok(dist(previousTip, current.tip) < 25, 'deep-bend motion must not invert the child tangent');
+    previous = { ...current.root }; previousTip = { ...current.tip };
+  }
+  limbs.release();
+});
+
+test('向内揉弯：中点可深入回弯，末端不漂移；末端拉近后再拉回不丢失原弯曲', () => {
+  const body = new SoftSculpt(), limbs = new LimbSystem(), parent = grow(limbs, body.shape, null, 8, 140);
+  const before = limbGeometry(parent, body.shape), root = before.root;
+  limbs.beginEdit(parent.id, 'bend', before.bend);
+  limbs.move({ x: before.bend.x - root.nx * 65 - root.tx * 25, y: before.bend.y - root.ny * 65 - root.ty * 25 }, body.shape);
+  limbs.release();
+  const bent = limbGeometry(parent, body.shape);
+  assert.ok((bent.bend.x - before.bend.x) * root.nx + (bent.bend.y - before.bend.y) * root.ny < -45);
+  assert.ok(dist(bent.tip, before.tip) < 1e-8);
+  const saved = JSON.stringify(parent.bend);
+  limbs.beginEdit(parent.id, 'tip', bent.tip);
+  limbs.move({ x: root.x, y: root.y }, body.shape);
+  limbs.move(bent.tip, body.shape);
+  assert.equal(JSON.stringify(parent.bend), saved, 'moving the end out and back must restore the chosen bend');
+  assert.doesNotMatch(limbGeometry(parent, body.shape).path, /NaN|Infinity/);
+  limbs.release();
 });
