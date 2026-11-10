@@ -1,0 +1,3 @@
+public/models/*.task binary
+docs/*.png binary
+desktop/*.bat text eol=crlf
