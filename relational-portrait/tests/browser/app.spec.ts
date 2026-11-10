@@ -57,10 +57,10 @@ test("complete journey: editable memory motifs, manual interaction, additive fut
   await page.waitForTimeout(200);
   await distance.focus();
   await page.keyboard.press("Home");
-  for (const name of ["Movement synchrony", "Raised hands"]) {
-    await page.getByRole("slider", { name, exact: true }).focus();
-    await page.keyboard.press("End");
-  }
+  await page
+    .getByRole("slider", { name: "Expression input (manual)", exact: true })
+    .focus();
+  await page.keyboard.press("End");
   await page.screenshot({
     path: "test-results/relational-interaction.png",
     fullPage: true,
@@ -72,7 +72,7 @@ test("complete journey: editable memory motifs, manual interaction, additive fut
     page.getByRole("button", { name: "View final portrait" }),
   ).toBeEnabled({ timeout: 22000 });
   await page.getByRole("button", { name: "View final portrait" }).click();
-  const { path, data } = await save(page);
+  const { data } = await save(page);
   expect(data.participants).toHaveLength(2);
   expect(data.plan.tags).toContain("Blue hour");
   expect(data.plan.tags).toContain("Campus paths");
@@ -81,7 +81,7 @@ test("complete journey: editable memory motifs, manual interaction, additive fut
   expect(data.futurePlan.tags).toContain("Reunion");
   expect(data.layers).toHaveLength(5);
   expect(data.frames.some((f: any) => f.signals.proximity === 0)).toBe(true);
-  expect(data.frames.some((f: any) => f.signals.hands === 1)).toBe(true);
+  expect(data.frames.some((f: any) => f.signals.expression === 1)).toBe(true);
   const pngWait = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export final PNG" }).click();
   const png = readFileSync(await (await pngWait).path());
@@ -99,37 +99,16 @@ test("complete journey: editable memory motifs, manual interaction, additive fut
   });
   await page.getByRole("button", { name: "Replay the full journey" }).click();
   await expect(page.locator(".mode-badge")).toContainText("PLAYBACK");
-  await page.getByRole("slider", { name: "Journey timeline" }).focus();
-  await page.keyboard.press("End");
-  await expect(
-    page.getByRole("button", { name: "Resume animation" }),
-  ).toBeVisible();
-  await page.getByLabel("Open portrait JSON").setInputFiles(path);
-  await expect(page.locator(".notice")).toContainText("restored");
-  const restored = await save(page);
-  expect(restored.data.plan.tags).toEqual(data.plan.tags);
-  expect(restored.data.futurePlan.tags).toEqual(data.futurePlan.tags);
-  await page.getByLabel("Open portrait JSON").setInputFiles({
-    name: "bad.json",
-    mimeType: "application/json",
-    buffer: Buffer.from("{broken"),
+  await expect(page.locator(".mode-badge")).toContainText("MANUAL", {
+    timeout: 40000,
   });
-  await expect(page.locator(".notice")).toContainText("unchanged");
   expect(errors).toEqual([]);
 });
-test("participant arrays are not limited to two; independent PNG layers preserve transforms", async ({
+test("independent PNG replacement preserves initial scene depth and exported artwork", async ({
   page,
 }) => {
-  await page.getByRole("button", { name: "Add participant" }).click();
-  await page
-    .getByLabel("Participant C memory")
-    .fill("We remember the garden and the rain.");
-  await page.getByRole("button", { name: "Find shared motifs" }).click();
   await generated(page);
-  await page.locator(".layer-tools summary").click();
-  const depth = page.getByRole("slider", { name: "Layer depth", exact: true });
-  await depth.focus();
-  await page.keyboard.press("End");
+  await page.locator(".asset-tools summary").click();
   // Generate a valid transparent PNG using the browser encoder.
   const data = await page.evaluate(() => {
     const c = document.createElement("canvas");
@@ -147,16 +126,13 @@ test("participant arrays are not limited to two; independent PNG layers preserve
   await page.getByRole("button", { name: "Enter live interaction" }).click();
   await page.getByRole("button", { name: "Imagine what comes next" }).click();
   await page.getByRole("button", { name: "Find future motifs" }).click();
-  // Third participant needs a future before the scene can grow.
-  await page
-    .getByLabel("Participant C future")
-    .fill("We will travel to a new ocean.");
-  await page.getByRole("button", { name: "Find future motifs" }).click();
   await page.getByRole("button", { name: "Grow this world" }).click();
   await page.getByRole("button", { name: /05.*Final portrait/ }).click();
   const saved = await save(page);
-  expect(saved.data.participants).toHaveLength(3);
-  expect(saved.data.layers.find((l: any) => l.id === "architecture").z).toBe(5);
+  expect(saved.data.participants).toHaveLength(2);
+  expect(saved.data.layers.find((l: any) => l.id === "architecture").z).toBe(
+    -1.3,
+  );
   expect(
     saved.data.layers.find((l: any) => l.id === "architecture").custom,
   ).toMatch(/^data:image\/png/);
@@ -262,13 +238,22 @@ test("real Three scene: proximity closes groups, raised hands lift fish, future 
     e.seek(22);
     const preserved = e.planes.get("architecture")!.id === original,
       opacity = (e.futurePlane.material as any).opacity;
+    e.configure({
+      ...w,
+      participants: [
+        ...w.participants,
+        { ...w.participants[0], id: "third", name: "Participant C" },
+      ],
+    });
+    const threeParticipantFish = e.fishes.length;
     e.dispose();
     host.remove();
-    return { far, near, low, high, preserved, opacity };
+    return { far, near, low, high, preserved, opacity, threeParticipantFish };
   });
   expect(result.far - result.near).toBeGreaterThan(5);
   expect(result.high - result.low).toBeCloseTo(1.65, 2);
   expect(result.preserved).toBe(true);
+  expect(result.threeParticipantFish).toBe(12);
   expect(result.opacity).toBeGreaterThan(0.7);
 });
 test("small screens retain a 16:9 WebGL artwork without horizontal overflow", async ({

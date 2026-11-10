@@ -46,7 +46,6 @@ export class PortraitEngine {
   replayEnd = 0;
   signals = { ...DEFAULT_SIGNALS };
   smooth = { ...DEFAULT_SIGNALS };
-  pointer = { x: 0, y: 0 };
   private raf = 0;
   private last = 0;
   private disposed = false;
@@ -415,12 +414,12 @@ export class PortraitEngine {
     water.scale.x *= 1 + evolution * 0.18;
     this.camera.position.x = THREE.MathUtils.lerp(
       this.camera.position.x,
-      this.pointer.x * 0.25,
+      Math.sin(t * 0.12) * 0.13,
       0.035,
     );
     this.camera.position.y = THREE.MathUtils.lerp(
       this.camera.position.y,
-      this.pointer.y * 0.15,
+      Math.cos(t * 0.1) * 0.07,
       0.035,
     );
     this.camera.lookAt(0, 0, 0);

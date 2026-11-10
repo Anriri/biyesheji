@@ -5,14 +5,13 @@ import {
   newWork,
   patchLayer,
   replaceParticipant,
-  validateWork,
   download,
   appendFrame,
 } from "./work";
 import { localCreativeService } from "./services/creative";
 import { PoseController, ManualExpression } from "./services/tracking";
 import type { TrackingUpdate } from "./services/tracking";
-import { PortraitEngine, sampleSignals } from "./engine";
+import { PortraitEngine } from "./engine";
 const steps: Phase[] = ["memory", "portrait", "interaction", "future", "final"];
 const stepNames = [
   "Memory input",
@@ -67,9 +66,6 @@ function Range({
           "Distance between participants": "Distance",
           "Movement synchrony": "Synchrony",
           "Expression input (manual)": "Expression · manual",
-          "Horizontal position": "X",
-          "Vertical position": "Y",
-          "Layer depth": "Depth",
         }[label] || label}
         <output>
           {unit === "%" ? Math.round(value * 100) + "%" : value.toFixed(2)}
@@ -151,13 +147,6 @@ function Tags({
     </div>
   );
 }
-function formatTime(t: number) {
-  return `${Math.floor(t / 60)
-    .toString()
-    .padStart(2, "0")}:${Math.floor(t % 60)
-    .toString()
-    .padStart(2, "0")}`;
-}
 export default function App() {
   const [work, setWork] = useState<Artwork>(newWork),
     [phase, setPhase] = useState<Phase>("memory"),
@@ -171,10 +160,8 @@ export default function App() {
     [cameraStatus, setCameraStatus] = useState(
       "Camera is off. Manual interaction is ready.",
     ),
-    [tracked, setTracked] = useState<TrackingUpdate | null>(null),
-    [preview, setPreview] = useState(false);
+    [tracked, setTracked] = useState<TrackingUpdate | null>(null);
   const [clock, setClock] = useState({ time: 0, evolution: 0 }),
-    [playing, setPlaying] = useState(true),
     [replay, setReplay] = useState(false),
     [selectedLayer, setSelectedLayer] = useState<Layer["id"]>("architecture");
   const host = useRef<HTMLDivElement>(null),
@@ -187,7 +174,6 @@ export default function App() {
     lastUi = useRef(0),
     signalsRef = useRef(signals),
     generatedRef = useRef(generated),
-    file = useRef<HTMLInputElement>(null),
     workRef = useRef(work);
   workRef.current = work;
   generatedRef.current = generated;
@@ -198,7 +184,10 @@ export default function App() {
       const e = new PortraitEngine(host.current, (time, evolution) => {
         if (performance.now() - lastUi.current > 120) {
           setClock({ time, evolution });
-          setPlaying(engine.current?.running ?? true);
+          if (engine.current?.replaying && !engine.current.running) {
+            engine.current.live();
+            setReplay(false);
+          }
           lastUi.current = performance.now();
         }
       });
@@ -258,7 +247,7 @@ export default function App() {
             proposals.find((x) => x.id === p.id)?.tags || [],
         })),
       }));
-      setNotice("Motifs found locally. Edit any word before continuing.");
+      setNotice("Motifs ready.");
     } catch {
       setNotice("Could not interpret these words. Add your own motifs below.");
     } finally {
@@ -291,14 +280,14 @@ export default function App() {
       setPhase("portrait");
       setClock({ time: 0, evolution: 0 });
       setReplay(false);
-      setPlaying(true);
+
       lastRecord.current = -1;
       if (engine.current) {
         engine.current.configure(next);
         engine.current.live();
         engine.current.seek(0);
       }
-      setNotice("Your first portrait is taking shape.");
+      setNotice("Portrait generated.");
     } catch (error) {
       setNotice((error as Error).message);
     } finally {
@@ -319,9 +308,7 @@ export default function App() {
         futureAt: t,
         duration: Math.max(w.duration, t + 12),
       }));
-      setNotice(
-        "New fragments are joining the existing world. Nothing is replaced.",
-      );
+      setNotice("Growing.");
     } catch (error) {
       setNotice((error as Error).message);
     } finally {
@@ -395,9 +382,7 @@ export default function App() {
         ...w,
         layers: patchLayer(w.layers, layer.id, { custom: data }),
       }));
-      setNotice(
-        `${layer.name} replaced. Its depth and interaction are preserved.`,
-      );
+      setNotice(`${layer.name} replaced.`);
     } catch (error) {
       setNotice((error as Error).message);
     }
@@ -417,10 +402,8 @@ export default function App() {
     engine.current?.replay(current.duration);
     setClock({ time: 0, evolution: 0 });
     setReplay(true);
-    setPlaying(true);
-    setNotice(
-      "Replaying the recorded input timeline, including the future transition.",
-    );
+
+    setNotice("Playing.");
   }
   function returnLive() {
     if (engine.current) {
@@ -428,27 +411,12 @@ export default function App() {
       engine.current.seek(work.duration);
     }
     setReplay(false);
-    setPlaying(true);
-  }
-  function togglePlay() {
-    if (engine.current) {
-      if (
-        engine.current.replaying &&
-        !engine.current.running &&
-        engine.current.time >= engine.current.replayEnd
-      )
-        engine.current.seek(0);
-      engine.current.running = !engine.current.running;
-      setPlaying(engine.current.running);
-    }
   }
   async function exportPNG() {
     try {
       if (!engine.current) throw new Error("The renderer is not available.");
       download(await engine.current.png(), "relational-portrait.png");
-      setNotice(
-        "PNG exported at 1600 × 900. The interface and camera are excluded.",
-      );
+      setNotice("PNG saved.");
     } catch (error) {
       setNotice((error as Error).message);
     }
@@ -465,41 +433,6 @@ export default function App() {
       "relational-memories.txt",
     );
   }
-  async function importWork(f: File | undefined) {
-    if (!f) return;
-    try {
-      if (f.size > 30 * 1024 * 1024)
-        throw new Error("Choose a JSON file under 30 MB.");
-      const w = validateWork(JSON.parse(await f.text()));
-      stopCamera();
-      setWork(w);
-      setSignals(sampleSignals(w.frames, w.duration));
-      setGenerated(true);
-      setPhase(w.futurePlan ? "final" : "portrait");
-      setClock({
-        time: w.duration,
-        evolution:
-          w.futureAt == null
-            ? 0
-            : Math.min(1, Math.max(0, (w.duration - w.futureAt) / 12)),
-      });
-      setReplay(true);
-      setPlaying(false);
-      if (engine.current) {
-        engine.current.configure(w);
-        engine.current.replay(w.duration);
-        engine.current.seek(w.duration);
-        engine.current.running = false;
-      }
-      setNotice("Portrait restored. You can replay its recorded journey.");
-    } catch (error) {
-      setNotice(
-        error instanceof SyntaxError
-          ? "Invalid JSON. Your current portrait is unchanged."
-          : (error as Error).message,
-      );
-    }
-  }
   const active = steps.indexOf(phase),
     layer = work.layers.find((l) => l.id === selectedLayer)!;
   const validMemory = work.participants.every(
@@ -515,27 +448,7 @@ export default function App() {
           <section className="person-card" key={p.id}>
             <div className="person-label">
               <span className={`person-dot dot-${i % 3}`} />
-              <input
-                aria-label={`Participant ${i + 1} name`}
-                value={p.name}
-                onChange={(e) =>
-                  updatePerson(p.id, { name: e.target.value.slice(0, 40) })
-                }
-              />
-              {work.participants.length > 1 && (
-                <button
-                  className="text-button"
-                  aria-label={`Remove ${p.name}`}
-                  onClick={() =>
-                    setWork((w) => ({
-                      ...w,
-                      participants: w.participants.filter((x) => x.id !== p.id),
-                    }))
-                  }
-                >
-                  ×
-                </button>
-              )}
+              <span>{p.name}</span>
             </div>
             <textarea
               readOnly={which === "future" && !!work.futurePlan}
@@ -568,29 +481,6 @@ export default function App() {
             </details>
           </section>
         ))}
-        {which === "memory" && (
-          <button
-            className="add-person"
-            onClick={() =>
-              setWork((w) => ({
-                ...w,
-                participants: [
-                  ...w.participants,
-                  {
-                    id: crypto.randomUUID(),
-                    name: `Participant ${String.fromCharCode(65 + w.participants.length)}`,
-                    memory: "",
-                    future: "",
-                    memoryTags: [],
-                    futureTags: [],
-                  },
-                ],
-              }))
-            }
-          >
-            + Add participant
-          </button>
-        )}
       </div>
     );
   }
@@ -598,27 +488,6 @@ export default function App() {
     <div className="app-shell">
       <header className="masthead">
         <span className="brand">RELATIONAL PORTRAIT</span>
-        <button
-          aria-label="Open portrait"
-          className="outline-button"
-          onClick={() => file.current?.click()}
-        >
-          Open{" "}
-          <span>
-            <Arrow />
-          </span>
-        </button>
-        <input
-          ref={file}
-          type="file"
-          accept=".json,application/json"
-          hidden
-          aria-label="Open portrait JSON"
-          onChange={(e) => {
-            void importWork(e.target.files?.[0]);
-            e.target.value = "";
-          }}
-        />
       </header>
       <nav className="steps" aria-label="Portrait stages">
         {steps.map((step, i) => (
@@ -627,7 +496,10 @@ export default function App() {
             aria-label={`${String(i + 1).padStart(2, "0")} ${stepNames[i]}`}
             aria-current={phase === step ? "step" : undefined}
             disabled={(i > 0 && !generated) || (i === 4 && !work.futurePlan)}
-            onClick={() => setPhase(step)}
+            onClick={() => {
+              if (replay) returnLive();
+              setPhase(step);
+            }}
           >
             <b>{String(i + 1).padStart(2, "0")}</b>
             <span>{shortSteps[i]}</span>
@@ -648,21 +520,7 @@ export default function App() {
                     : "MANUAL"}
             </span>
           </div>
-          <div
-            className="art-frame"
-            onPointerMove={(e) => {
-              if (engine.current) {
-                const b = e.currentTarget.getBoundingClientRect();
-                engine.current.pointer = {
-                  x: ((e.clientX - b.left) / b.width) * 2 - 1,
-                  y: 1 - ((e.clientY - b.top) / b.height) * 2,
-                };
-              }
-            }}
-            onPointerLeave={() => {
-              if (engine.current) engine.current.pointer = { x: 0, y: 0 };
-            }}
-          >
+          <div className="art-frame">
             <div className="three-host" ref={host} />
             {fatal && (
               <div className="render-error" role="alert">
@@ -670,45 +528,6 @@ export default function App() {
               </div>
             )}
           </div>
-          <div className="art-caption">
-            <button
-              className="circle-button"
-              aria-label={playing ? "Pause animation" : "Resume animation"}
-              onClick={togglePlay}
-            >
-              {playing ? (
-                <span className="pause-mark" />
-              ) : (
-                <span className="play-mark" />
-              )}
-            </button>
-            <span className="timestamp">{formatTime(clock.time)}</span>
-          </div>
-          {replay && (
-            <div className="replay-bar">
-              <span>RECORDED JOURNEY</span>
-              <input
-                type="range"
-                aria-label="Journey timeline"
-                min="0"
-                max={Math.max(work.duration, 1)}
-                step=".1"
-                value={Math.min(clock.time, work.duration)}
-                onChange={(e) => {
-                  const t = Number(e.target.value);
-                  if (engine.current) {
-                    engine.current.running = false;
-                    engine.current.seek(t);
-                  }
-                  setClock((c) => ({ ...c, time: t }));
-                  setPlaying(false);
-                }}
-              />
-              <button onClick={returnLive}>
-                Return to live <Arrow />
-              </button>
-            </div>
-          )}
         </section>
         <aside className="control-panel">
           <h2>{captions[active]}</h2>
@@ -722,7 +541,7 @@ export default function App() {
                   disabled={busy}
                   onClick={() => void findMotifs("memory")}
                 >
-                  Find motifs <span>✧</span>
+                  Find motifs
                 </button>
                 <button
                   className="primary-button"
@@ -739,105 +558,33 @@ export default function App() {
           )}
           {phase === "portrait" && (
             <>
-              <details className="fold layer-tools">
-                <summary>Edit layers</summary>
-                <div className="layer-tabs">
+              <details className="fold asset-tools">
+                <summary>PNG assets</summary>
+                <select
+                  aria-label="Asset layer"
+                  value={selectedLayer}
+                  onChange={(e) =>
+                    setSelectedLayer(e.target.value as Layer["id"])
+                  }
+                >
                   {work.layers.map((l) => (
-                    <button
-                      key={l.id}
-                      aria-pressed={selectedLayer === l.id}
-                      onClick={() => setSelectedLayer(l.id)}
-                    >
-                      {l.name.split(" ")[0]}
-                    </button>
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
                   ))}
-                </div>
-                <div className="layer-editor">
-                  <div className="layer-editor-title">
-                    <strong>{layer.name}</strong>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={layer.visible}
-                        onChange={(e) =>
-                          setWork((w) => ({
-                            ...w,
-                            layers: patchLayer(w.layers, layer.id, {
-                              visible: e.target.checked,
-                            }),
-                          }))
-                        }
-                      />{" "}
-                      Visible
-                    </label>
-                  </div>
-                  {(["x", "y", "z", "scale", "opacity"] as const).map((key) => (
-                    <Range
-                      key={key}
-                      label={
-                        {
-                          x: "Horizontal position",
-                          y: "Vertical position",
-                          z: "Layer depth",
-                          scale: "Size",
-                          opacity: "Opacity",
-                        }[key]
-                      }
-                      value={layer[key]}
-                      min={
-                        key === "scale"
-                          ? 0.25
-                          : key === "opacity"
-                            ? 0
-                            : key === "y"
-                              ? -4
-                              : -5
-                      }
-                      max={
-                        key === "scale"
-                          ? 2
-                          : key === "opacity"
-                            ? 1
-                            : key === "y"
-                              ? 4
-                              : 5
-                      }
-                      onChange={(v) =>
-                        setWork((w) => ({
-                          ...w,
-                          layers: patchLayer(w.layers, layer.id, { [key]: v }),
-                        }))
-                      }
-                    />
-                  ))}
-                  <label className="upload-button">
-                    ↑ Replace with transparent PNG
-                    <input
-                      type="file"
-                      accept="image/png"
-                      aria-label={`Upload ${layer.name} PNG`}
-                      onChange={(e) => {
-                        void upload(layer, e.target.files?.[0]);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                  {layer.custom && (
-                    <button
-                      className="text-button"
-                      onClick={() =>
-                        setWork((w) => ({
-                          ...w,
-                          layers: patchLayer(w.layers, layer.id, {
-                            custom: undefined,
-                          }),
-                        }))
-                      }
-                    >
-                      Restore original fragment
-                    </button>
-                  )}
-                </div>
+                </select>
+                <label className="upload-button">
+                  Upload PNG
+                  <input
+                    type="file"
+                    accept="image/png"
+                    aria-label={`Upload ${layer.name} PNG`}
+                    onChange={(e) => {
+                      void upload(layer, e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
               </details>
               <button
                 aria-label="Enter live interaction"
@@ -876,20 +623,6 @@ export default function App() {
                 onChange={(v) => manual("proximity", 1 - v)}
               />
               <Range
-                label="Movement synchrony"
-                value={signals.synchrony}
-                unit="%"
-                disabled={inputSource === "camera" || replay}
-                onChange={(v) => manual("synchrony", v)}
-              />
-              <Range
-                label="Raised hands"
-                value={signals.hands}
-                unit="%"
-                disabled={inputSource === "camera" || replay}
-                onChange={(v) => manual("hands", v)}
-              />
-              <Range
                 label="Expression input (manual)"
                 value={signals.expression}
                 unit="%"
@@ -918,14 +651,6 @@ export default function App() {
                   Stop camera
                 </button>
               )}
-              <label className="preview-toggle">
-                <input
-                  type="checkbox"
-                  checked={preview}
-                  onChange={(e) => setPreview(e.target.checked)}
-                />{" "}
-                Camera preview
-              </label>
               <button
                 aria-label="Imagine what comes next"
                 className="primary-button"
@@ -947,7 +672,7 @@ export default function App() {
                 disabled={busy || replay || !!work.futurePlan}
                 onClick={() => void findMotifs("future")}
               >
-                Find motifs <span>✧</span>
+                Find motifs
               </button>
               <button
                 className="primary-button"
@@ -1014,10 +739,7 @@ export default function App() {
               </div>
             </>
           )}
-          <div
-            className="video-preview"
-            hidden={!preview || phase !== "interaction"}
-          >
+          <div className="video-preview" hidden>
             <video
               ref={video}
               muted
