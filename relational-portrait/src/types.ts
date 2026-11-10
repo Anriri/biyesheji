@@ -34,6 +34,11 @@ export interface Frame {
   t: number;
   signals: Signals;
   source: "manual" | "camera";
+  bodies?: BodyPosition[];
+}
+export interface BodyPosition {
+  x: number;
+  y: number;
 }
 export interface Plan {
   tags: string[];

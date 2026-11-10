@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { Artwork, Layer, Participant, Phase, Signals } from "./types";
+import type {
+  Artwork,
+  BodyPosition,
+  Layer,
+  Participant,
+  Phase,
+  Signals,
+} from "./types";
 import { DEFAULT_SIGNALS } from "./types";
 import {
   newWork,
@@ -217,14 +224,19 @@ export default function App() {
       ...w,
       participants: replaceParticipant(w.participants, id, patch),
     }));
-  function record(value: Signals, source: "manual" | "camera") {
+  function record(
+    value: Signals,
+    source: "manual" | "camera",
+    bodies: BodyPosition[] = [],
+  ) {
     setSignals(value);
+    engine.current?.setBodies(bodies);
     if (!generatedRef.current || engine.current?.replaying) return;
     const t = engine.current?.time || 0;
     if (source === "camera" && t - lastRecord.current < 0.5) return;
     lastRecord.current = t;
     setWork((w) => {
-      const frames = appendFrame(w.frames, t, value, source);
+      const frames = appendFrame(w.frames, t, value, source, bodies);
       return {
         ...w,
         duration: Math.max(w.duration, frames.at(-1)!.t),
@@ -329,6 +341,7 @@ export default function App() {
           record(
             { ...u.signals, expression: expression.current.value },
             "camera",
+            u.bodies,
           );
         },
         (s) => {
@@ -336,6 +349,7 @@ export default function App() {
           if (s.startsWith("Tracking stopped")) {
             setInputSource("manual");
             setTracked(null);
+            engine.current?.setBodies([]);
           }
         },
       );
@@ -355,6 +369,7 @@ export default function App() {
     setInputSource("manual");
     setCameraBusy(false);
     setTracked(null);
+    engine.current?.setBodies([]);
     setCameraStatus("Camera is off. Manual controls are active.");
   }
   function manual(key: keyof Signals, value: number) {
@@ -629,7 +644,11 @@ export default function App() {
                 disabled={replay}
                 onChange={(v) => {
                   expression.current.value = v;
-                  record({ ...signalsRef.current, expression: v }, inputSource);
+                  record(
+                    { ...signalsRef.current, expression: v },
+                    inputSource,
+                    inputSource === "camera" ? tracked?.bodies || [] : [],
+                  );
                 }}
               />
               <p className="camera-status" role="status">
@@ -641,7 +660,7 @@ export default function App() {
                     {tracked?.count === 2
                       ? "Two body positions detected"
                       : tracked?.count === 1
-                        ? "One body visible; distance needs two"
+                        ? "One body tracked; add a second for distance"
                         : "Waiting for bodies"}
                   </>
                 )}

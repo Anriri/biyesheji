@@ -1,16 +1,32 @@
 import { DEFAULT_LAYERS, DEFAULT_PARTICIPANTS, DEFAULT_SIGNALS } from "./types";
-import type { Artwork, Frame, Layer, Participant, Signals } from "./types";
+import type {
+  Artwork,
+  BodyPosition,
+  Frame,
+  Layer,
+  Participant,
+  Signals,
+} from "./types";
 import { planFromTags } from "./services/creative";
 export function appendFrame(
   frames: Frame[],
   sceneTime: number,
   signals: Signals,
   source: Frame["source"],
+  bodies: BodyPosition[] = [],
 ): Frame[] {
   // Several input events can arrive before the next rendered frame. Preserve
   // each action instead of overwriting events that share the same scene time.
   const t = Math.max(sceneTime, (frames.at(-1)?.t ?? -0.001) + 0.001);
-  return [...frames, { t, signals: { ...signals }, source }];
+  return [
+    ...frames,
+    {
+      t,
+      signals: { ...signals },
+      source,
+      bodies: bodies.map(({ x, y }) => ({ x, y })),
+    },
+  ];
 }
 export function newWork(): Artwork {
   return {
@@ -100,6 +116,17 @@ export function validateWork(data: unknown): Artwork {
   }
   let previous = -1;
   for (const f of w.frames) {
+    if (
+      f?.bodies !== undefined &&
+      (!Array.isArray(f.bodies) ||
+        f.bodies.length > 100 ||
+        f.bodies.some(
+          (p) =>
+            !p ||
+            ![p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1),
+        ))
+    )
+      fail();
     if (
       !f ||
       !["manual", "camera"].includes(f.source) ||

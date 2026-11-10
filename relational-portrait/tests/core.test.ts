@@ -10,8 +10,13 @@ import {
   motionSignals,
   poseSample,
 } from "../src/services/tracking.ts";
-import { newWork, validateWork, replaceParticipant, appendFrame } from "../src/work.ts";
-import { sampleSignals } from "../src/engine.ts";
+import {
+  newWork,
+  validateWork,
+  replaceParticipant,
+  appendFrame,
+} from "../src/work.ts";
+import { sampleSignals, sampleBodies } from "../src/engine.ts";
 test("memory and future extraction map the provided examples, remain editable, and accept non-English input", async () => {
   const w = newWork();
   const p = await localCreativeService.extract(w.participants, "memory");
@@ -83,6 +88,37 @@ test("identity association survives detector ordering changes; missing/still bod
   assert.equal(motionSignals(still, 0.4).synchrony, 0);
   assert.equal(motionSignals([still[0]], 0.4).synchrony, 0);
 });
+test("seated participants with visible shoulders remain tracked when hips are outside the frame", () => {
+  const landmarks = Array.from({ length: 33 }, () => ({
+    x: 0.4,
+    y: 0.5,
+    z: 0,
+    visibility: 0,
+  }));
+  landmarks[11] = { x: 0.3, y: 0.4, z: 0, visibility: 0.99 };
+  landmarks[12] = { x: 0.5, y: 0.4, z: 0, visibility: 0.99 };
+  assert.deepEqual(poseSample(landmarks), { x: 0.6, y: 0.4, raised: 0 });
+  landmarks[11].visibility = 0;
+  assert.equal(poseSample(landmarks), null);
+});
+test("camera positions are copied into the exported timeline and reproduced during playback", () => {
+  const work = newWork(),
+    bodies = [{ x: 0.2, y: 0.4 }];
+  let frames = appendFrame([], 0, work.frames[0].signals, "camera", bodies);
+  bodies[0].x = 0.8;
+  frames = appendFrame(frames, 2, work.frames[0].signals, "camera", bodies);
+  assert.equal(frames[0].bodies![0].x, 0.2);
+  assert.equal(sampleBodies(frames, 1)[0].x, 0.5);
+  assert.doesNotThrow(() => validateWork({ ...work, frames, duration: 2 }));
+  assert.throws(() =>
+    validateWork({
+      ...work,
+      frames: [{ ...frames[0], bodies: [{ x: NaN, y: 0 }] }],
+      duration: 2,
+    }),
+  );
+  assert.deepEqual(sampleBodies(work.frames, 1), []);
+});
 test("closer bodies converge, same-direction movement coordinates, raised hands lift; supports more than two", () => {
   const body = (id: string, x: number, vx = 0.15) => ({
     id,
@@ -120,13 +156,25 @@ test("recorded timeline interpolates and clamps without regenerating assets", ()
 });
 test("rapid input before a render frame keeps every action in a monotonic timeline", () => {
   const w = newWork();
-  let frames = appendFrame(w.frames, 0, { ...w.frames[0].signals, proximity: 0 }, "manual");
-  frames = appendFrame(frames, 0, { ...w.frames[0].signals, proximity: 1 }, "manual");
+  let frames = appendFrame(
+    w.frames,
+    0,
+    { ...w.frames[0].signals, proximity: 0 },
+    "manual",
+  );
+  frames = appendFrame(
+    frames,
+    0,
+    { ...w.frames[0].signals, proximity: 1 },
+    "manual",
+  );
   assert.equal(frames.length, 3);
   assert.equal(frames[1].signals.proximity, 0);
   assert.equal(frames[2].signals.proximity, 1);
   assert.ok(frames[2].t > frames[1].t && frames[1].t > frames[0].t);
-  assert.doesNotThrow(() => validateWork({ ...w, frames, duration: frames.at(-1)!.t }));
+  assert.doesNotThrow(() =>
+    validateWork({ ...w, frames, duration: frames.at(-1)!.t }),
+  );
 });
 test("JSON round trip preserves input and independent layers; invalid files cannot inject remote textures", () => {
   const w = newWork();

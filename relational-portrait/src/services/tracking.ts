@@ -31,10 +31,12 @@ export class ManualExpression implements ExpressionSource {
 }
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 export function poseSample(landmarks: NormalizedLandmark[]): BodySample | null {
-  const torso = [11, 12, 23, 24]
+  const torso = [11, 12]
     .map((i) => landmarks[i])
     .filter((p) => p && (p.visibility ?? 1) > 0.45);
-  if (torso.length < 3) return null;
+  // A laptop camera often sees shoulders but not hips. Keep this real pose
+  // instead of discarding seated participants after successful inference.
+  if (torso.length < 2) return null;
   const x = 1 - torso.reduce((s, p) => s + p.x, 0) / torso.length,
     y = torso.reduce((s, p) => s + p.y, 0) / torso.length;
   let raised = 0;
@@ -214,7 +216,7 @@ export class PoseController {
         return;
       }
       this.landmarker = detector;
-      onStatus("Camera active · step back so both upper bodies are visible.");
+      onStatus("Camera active · keep both shoulders in view.");
       let last = 0,
         lastVideo = -1;
       const frame = (now: number) => {

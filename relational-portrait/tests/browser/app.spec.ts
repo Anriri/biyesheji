@@ -229,6 +229,20 @@ test("real Three scene: proximity closes groups, raised hands lift fish, future 
     e.seek(10);
     const near = Math.abs(e.fishes[0].position.x - e.fishes[4].position.x),
       high = e.fishes[0].position.y;
+    e.setBodies([{ x: 0.25, y: 0.6 }]);
+    e.seek(10);
+    const left = e.fishes[0].position.clone(),
+      other = e.fishes[4].position.clone();
+    const traceLeft = e.traces[0].geometry.attributes.position.getX(0);
+    e.setBodies([{ x: 0.75, y: 0.3 }]);
+    e.seek(10);
+    const movement = {
+      x: e.fishes[0].position.x - left.x,
+      y: e.fishes[0].position.y - left.y,
+      other: e.fishes[4].position.distanceTo(other),
+      trace: e.traces[0].geometry.attributes.position.getX(0) - traceLeft,
+    };
+    e.setBodies([]);
     const original = e.planes.get("architecture")!.id;
     e.configure({
       ...w,
@@ -248,12 +262,25 @@ test("real Three scene: proximity closes groups, raised hands lift fish, future 
     const threeParticipantFish = e.fishes.length;
     e.dispose();
     host.remove();
-    return { far, near, low, high, preserved, opacity, threeParticipantFish };
+    return {
+      far,
+      near,
+      low,
+      high,
+      preserved,
+      opacity,
+      threeParticipantFish,
+      movement,
+    };
   });
   expect(result.far - result.near).toBeGreaterThan(5);
   expect(result.high - result.low).toBeCloseTo(1.65, 2);
   expect(result.preserved).toBe(true);
   expect(result.threeParticipantFish).toBe(12);
+  expect(result.movement.x).toBeCloseTo(1.9);
+  expect(result.movement.y).toBeCloseTo(0.9);
+  expect(result.movement.trace).toBeCloseTo(1.9);
+  expect(result.movement.other).toBe(0);
   expect(result.opacity).toBeGreaterThan(0.7);
 });
 test("small screens retain a 16:9 WebGL artwork without horizontal overflow", async ({

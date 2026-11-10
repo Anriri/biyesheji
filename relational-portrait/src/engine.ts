@@ -1,5 +1,12 @@
 import * as THREE from "three";
-import type { Artwork, Layer, LayerId, Plan, Signals } from "./types";
+import type {
+  Artwork,
+  BodyPosition,
+  Layer,
+  LayerId,
+  Plan,
+  Signals,
+} from "./types";
 import { DEFAULT_SIGNALS } from "./types";
 import { createAssets, OCEAN_ASSET } from "./assets";
 export function sampleSignals(frames: Artwork["frames"], t: number): Signals {
@@ -27,6 +34,31 @@ export function sampleSignals(frames: Artwork["frames"], t: number): Signals {
     ]),
   ) as unknown as Signals;
 }
+export function sampleBodies(
+  frames: Artwork["frames"],
+  t: number,
+): BodyPosition[] {
+  let a = frames[0],
+    b = a;
+  if (!a) return [];
+  for (const f of frames) {
+    if (f.t <= t) a = b = f;
+    else {
+      b = f;
+      break;
+    }
+  }
+  const start = a.bodies || [],
+    end = b.bodies || [];
+  const amount =
+    b.t === a.t || start.length !== end.length
+      ? 0
+      : THREE.MathUtils.clamp((t - a.t) / (b.t - a.t), 0, 1);
+  return start.map((p, i) => ({
+    x: THREE.MathUtils.lerp(p.x, end[i]?.x ?? p.x, amount),
+    y: THREE.MathUtils.lerp(p.y, end[i]?.y ?? p.y, amount),
+  }));
+}
 export class PortraitEngine {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
@@ -46,6 +78,8 @@ export class PortraitEngine {
   replayEnd = 0;
   signals = { ...DEFAULT_SIGNALS };
   smooth = { ...DEFAULT_SIGNALS };
+  private bodies: BodyPosition[] = [];
+  private bodyOffsets: BodyPosition[] = [];
   private raf = 0;
   private last = 0;
   private disposed = false;
@@ -246,6 +280,9 @@ export class PortraitEngine {
   setSignals(value: Signals) {
     this.signals = { ...value };
   }
+  setBodies(bodies: BodyPosition[]) {
+    this.bodies = bodies.map(({ x, y }) => ({ x, y }));
+  }
   seek(t: number) {
     this.time = Math.max(0, t);
     this.smooth = sampleSignals(this.work?.frames || [], this.time);
@@ -329,6 +366,16 @@ export class PortraitEngine {
       connections = work.layers.find((l) => l.id === "connections")!;
     const count = work.participants.length,
       perGroup = work.plan.object === "fish" ? 4 : 1;
+    const bodies = this.replaying ? sampleBodies(work.frames, t) : this.bodies;
+    this.bodyOffsets = work.participants.map((_, i) => {
+      const p = bodies[i],
+        previous = this.bodyOffsets[i] || { x: 0, y: 0 };
+      const amount = dt ? 1 - Math.exp(-dt * 7) : 1;
+      return {
+        x: THREE.MathUtils.lerp(previous.x, p ? (p.x - 0.5) * 3.8 : 0, amount),
+        y: THREE.MathUtils.lerp(previous.y, p ? (0.55 - p.y) * 3 : 0, amount),
+      };
+    });
     this.fishes.forEach((fish, i) => {
       const person = Math.floor(i / perGroup),
         n = i % perGroup;
@@ -355,7 +402,11 @@ export class PortraitEngine {
         s.hands * 1.65 +
         evolution * 0.45 +
         n * 0.16;
-      fish.position.set(x, y, Math.sin(tt) * 0.3);
+      fish.position.set(
+        x + this.bodyOffsets[person].x,
+        y + this.bodyOffsets[person].y,
+        Math.sin(tt) * 0.3,
+      );
       fish.rotation.z = Math.sin(tt * 0.9) * 0.13;
       const size =
         (0.62 + n * 0.15) * (work.plan.object === "memento" ? 1.4 : 1);
@@ -388,13 +439,15 @@ export class PortraitEngine {
         array[j * 3] =
           Math.cos(angle) * separation * (1 - u * (0.15 + 0.85 * s.proximity)) +
           Math.sin(u * Math.PI) * (branch ? -0.6 : 0.6) +
-          evolution * u * 2.8;
+          evolution * u * 2.8 +
+          this.bodyOffsets[person].x * (1 - u * 0.5);
         array[j * 3 + 1] =
           -1.35 +
           u * 1.8 +
           wave +
           branch * 0.18 +
-          (1 - s.proximity) * Math.sin(u * Math.PI) * person * 0.24;
+          (1 - s.proximity) * Math.sin(u * Math.PI) * person * 0.24 +
+          this.bodyOffsets[person].y * (1 - u * 0.5);
         array[j * 3 + 2] = Math.sin(u * Math.PI) * 0.35;
       }
       line.geometry.attributes.position.needsUpdate = true;
