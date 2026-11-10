@@ -1,6 +1,7 @@
 import type {
   NormalizedLandmark,
   PoseLandmarker,
+  FaceLandmarker,
 } from "@mediapipe/tasks-vision";
 import type { Signals } from "../types";
 export interface BodySample {
@@ -19,10 +20,12 @@ export interface TrackingUpdate {
   signals: Signals;
   count: number;
   fps: number;
+  faceCount: number;
+  expressionMode: "camera" | "manual";
 }
 export interface ExpressionSource {
   read(): number;
-} // Future Face Landmarker adapter; no affect/psychological labels.
+} // Physical facial activity only; no affect/psychological labels.
 export class ManualExpression implements ExpressionSource {
   value = 0.35;
   read() {
@@ -126,8 +129,56 @@ export function motionSignals(
     expression,
   };
 }
+export function facialActivity(
+  faces: { categories: { categoryName: string; score: number }[] }[],
+): number {
+  return faces.reduce((strongest, face) => {
+    const score = (key: string) =>
+      clamp(face.categories.find((c) => c.categoryName === key)?.score || 0);
+    const smile = (score("mouthSmileLeft") + score("mouthSmileRight")) / 2;
+    const blink = (score("eyeBlinkLeft") + score("eyeBlinkRight")) / 2;
+    return Math.max(
+      strongest,
+      clamp(
+        (Math.max(
+          smile,
+          score("jawOpen"),
+          score("browInnerUp") * 0.8,
+          blink * 0.65,
+        ) -
+          0.05) /
+          0.7,
+      ),
+    );
+  }, 0);
+}
+async function loadModel(
+  name: string,
+  label: string,
+  hash: string,
+  abort: AbortController,
+) {
+  const timer = setTimeout(() => abort.abort(), 20000);
+  try {
+    const response = await fetch(new URL(`models/${name}`, document.baseURI), {
+      signal: abort.signal,
+    });
+    if (!response.ok) throw new Error(`${label} model missing.`);
+    const buffer = await response.arrayBuffer();
+    const actual = Array.from(
+      new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)),
+      (b) => b.toString(16).padStart(2, "0"),
+    ).join("");
+    if (actual !== hash)
+      throw new Error(`${label} model failed integrity check.`);
+    return new Uint8Array(buffer);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 export class PoseController {
   private landmarker: PoseLandmarker | null = null;
+  private faceLandmarker: FaceLandmarker | null = null;
   private stream: MediaStream | null = null;
   private raf = 0;
   private token = 0;
@@ -166,36 +217,17 @@ export class PoseController {
       await video.play();
       if (token !== this.token) return;
       onStatus("Loading local pose model…");
-      const { FilesetResolver, PoseLandmarker } = await import(
+      const { FilesetResolver, PoseLandmarker, FaceLandmarker } = await import(
         "@mediapipe/tasks-vision"
       );
       this.abort = new AbortController();
-      const timer = setTimeout(() => this.abort?.abort(), 15000);
-      let model: ArrayBuffer;
-      try {
-        const response = await fetch(
-          new URL("models/pose_landmarker_lite.task", document.baseURI),
-          { signal: this.abort.signal },
-        );
-        if (!response.ok)
-          throw new Error(
-            "Pose model missing. Use manual controls or restore public/models.",
-          );
-        model = await response.arrayBuffer();
-        const hash = Array.from(
-          new Uint8Array(await crypto.subtle.digest("SHA-256", model)),
-          (b) => b.toString(16).padStart(2, "0"),
-        ).join("");
-        if (
-          hash !==
-          "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"
-        )
-          throw new Error(
-            "Local pose model failed integrity check. Restore the model; manual controls remain available.",
-          );
-      } finally {
-        clearTimeout(timer);
-      }
+      const model = await loadModel(
+        "pose_landmarker_lite.task",
+        "Pose",
+        "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
+        this.abort,
+      );
+      if (token !== this.token) return;
       const files = await FilesetResolver.forVisionTasks(
         new URL("vision/wasm", document.baseURI).href,
       );
@@ -216,9 +248,44 @@ export class PoseController {
         return;
       }
       this.landmarker = detector;
-      onStatus("Camera active · keep both shoulders in view.");
+      let faceFailure = "";
+      try {
+        onStatus("Loading local face model…");
+        const faceModel = await loadModel(
+          "face_landmarker.task",
+          "Face",
+          "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+          this.abort,
+        );
+        if (token !== this.token) return;
+        const face = await FaceLandmarker.createFromOptions(files, {
+          baseOptions: { modelAssetBuffer: faceModel, delegate: "CPU" },
+          runningMode: "VIDEO",
+          numFaces: 2,
+          outputFaceBlendshapes: true,
+          outputFacialTransformationMatrixes: false,
+          minFaceDetectionConfidence: 0.45,
+          minFacePresenceConfidence: 0.45,
+          minTrackingConfidence: 0.45,
+        });
+        if (token !== this.token) {
+          face.close();
+          return;
+        }
+        this.faceLandmarker = face;
+      } catch (error) {
+        if (token !== this.token) return;
+        faceFailure =
+          error instanceof Error ? error.message : "Face model unavailable.";
+      }
+      onStatus(
+        `Camera active · ${faceFailure ? faceFailure + " Expression slider is manual." : "Pose + facial movement."}`,
+      );
       let last = 0,
-        lastVideo = -1;
+        lastVideo = -1,
+        lastFace = 0,
+        faceCount = 0,
+        activity = 0;
       const frame = (now: number) => {
         if (token !== this.token || !this.landmarker) return;
         try {
@@ -235,9 +302,29 @@ export class PoseController {
                 .map(poseSample)
                 .filter((s): s is BodySample => s !== null);
             this.bodies = matchBodies(this.bodies, samples, now);
+            if (this.faceLandmarker && now - lastFace > 180) {
+              lastFace = now;
+              try {
+                const faces = this.faceLandmarker.detectForVideo(video, now);
+                faceCount = faces.faceLandmarks.length;
+                activity = facialActivity(faces.faceBlendshapes);
+              } catch {
+                this.faceLandmarker.close();
+                this.faceLandmarker = null;
+                faceCount = 0;
+                onStatus(
+                  "Camera active · Face tracking stopped. Expression slider is manual.",
+                );
+              }
+            }
             onUpdate({
               bodies: this.bodies,
-              signals: motionSignals(this.bodies, this.expression.read()),
+              signals: motionSignals(
+                this.bodies,
+                this.faceLandmarker ? activity : this.expression.read(),
+              ),
+              faceCount,
+              expressionMode: this.faceLandmarker ? "camera" : "manual",
               count: samples.length,
               fps: 1000 / dt,
             });
@@ -273,6 +360,8 @@ export class PoseController {
     this.abort = null;
     this.landmarker?.close();
     this.landmarker = null;
+    this.faceLandmarker?.close();
+    this.faceLandmarker = null;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     this.bodies = [];

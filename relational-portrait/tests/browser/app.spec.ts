@@ -199,6 +199,13 @@ test("local CPU pose model really initializes and runs on a camera stream; stopp
     .poll(async () => await page.locator(".camera-status").innerText())
     .toMatch(/FPS/);
   await expect(page.locator(".mode-badge")).toContainText("CAMERA");
+  await expect(
+    page.getByRole("slider", {
+      name: "Expression input (camera)",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await expect(page.locator(".camera-status")).toContainText("0 faces");
   await page.getByRole("button", { name: "Manual", exact: true }).click();
   await expect(page.locator(".mode-badge")).toContainText("MANUAL");
   expect(
@@ -206,6 +213,37 @@ test("local CPU pose model really initializes and runs on a camera stream; stopp
   ).toBeNull();
   await page.waitForTimeout(250);
   expect(external).toEqual([]);
+});
+test("missing face model preserves pose tracking and enables the expression fallback", async ({
+  page,
+}) => {
+  await generated(page);
+  await page.getByRole("button", { name: "Enter live interaction" }).click();
+  await page.route("**/models/face_landmarker.task", (route) =>
+    route.fulfill({ status: 404, body: "missing" }),
+  );
+  await page.getByRole("button", { name: "Use camera", exact: true }).click();
+  await expect(page.locator(".camera-status")).toContainText(
+    "Face model missing",
+    { timeout: 30000 },
+  );
+  await expect(page.locator(".mode-badge")).toContainText("CAMERA");
+  await expect(
+    page.getByRole("slider", {
+      name: "Expression input (manual)",
+      exact: true,
+    }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("slider", {
+      name: "Distance between participants",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Manual", exact: true }).click();
+  expect(
+    await page.locator("video").evaluate((v: HTMLVideoElement) => v.srcObject),
+  ).toBeNull();
 });
 test("real Three scene: proximity closes groups, raised hands lift fish, future keeps the original meshes", async ({
   page,
@@ -243,6 +281,17 @@ test("real Three scene: proximity closes groups, raised hands lift fish, future 
       trace: e.traces[0].geometry.attributes.position.getX(0) - traceLeft,
     };
     e.setBodies([]);
+    e.seek(10);
+    const restingY = e.fishes[0].position.y,
+      restingSize = Math.abs(e.fishes[0].scale.x),
+      restingWater = e.groups.get("water")!.scale.x;
+    e.setSignals({ proximity: 1, synchrony: 1, hands: 1, expression: 1 });
+    e.seek(10);
+    const expressionChange = {
+      height: e.fishes[0].position.y - restingY,
+      size: Math.abs(e.fishes[0].scale.x) / restingSize,
+      water: e.groups.get("water")!.scale.x / restingWater,
+    };
     const original = e.planes.get("architecture")!.id;
     e.configure({
       ...w,
@@ -271,6 +320,7 @@ test("real Three scene: proximity closes groups, raised hands lift fish, future 
       opacity,
       threeParticipantFish,
       movement,
+      expressionChange,
     };
   });
   expect(result.far - result.near).toBeGreaterThan(5);
@@ -281,6 +331,9 @@ test("real Three scene: proximity closes groups, raised hands lift fish, future 
   expect(result.movement.y).toBeCloseTo(0.9);
   expect(result.movement.trace).toBeCloseTo(1.9);
   expect(result.movement.other).toBe(0);
+  expect(result.expressionChange.height).toBeCloseTo(0.85);
+  expect(result.expressionChange.size).toBeCloseTo(1.18);
+  expect(result.expressionChange.water).toBeGreaterThan(1.09);
   expect(result.opacity).toBeGreaterThan(0.7);
 });
 test("small screens retain a 16:9 WebGL artwork without horizontal overflow", async ({

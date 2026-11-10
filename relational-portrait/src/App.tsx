@@ -73,6 +73,7 @@ function Range({
           "Distance between participants": "Distance",
           "Movement synchrony": "Synchrony",
           "Expression input (manual)": "Expression · manual",
+          "Expression input (camera)": "Expression · camera",
         }[label] || label}
         <output>
           {unit === "%" ? Math.round(value * 100) + "%" : value.toFixed(2)}
@@ -338,11 +339,7 @@ export default function App() {
         (u) => {
           setTracked(u);
           setInputSource("camera");
-          record(
-            { ...u.signals, expression: expression.current.value },
-            "camera",
-            u.bodies,
-          );
+          record(u.signals, "camera", u.bodies);
         },
         (s) => {
           setCameraStatus(s);
@@ -638,10 +635,19 @@ export default function App() {
                 onChange={(v) => manual("proximity", 1 - v)}
               />
               <Range
-                label="Expression input (manual)"
+                label={
+                  inputSource === "camera" &&
+                  tracked?.expressionMode === "camera"
+                    ? "Expression input (camera)"
+                    : "Expression input (manual)"
+                }
                 value={signals.expression}
                 unit="%"
-                disabled={replay}
+                disabled={
+                  replay ||
+                  (inputSource === "camera" &&
+                    tracked?.expressionMode === "camera")
+                }
                 onChange={(v) => {
                   expression.current.value = v;
                   record(
@@ -662,6 +668,13 @@ export default function App() {
                       : tracked?.count === 1
                         ? "One body tracked; add a second for distance"
                         : "Waiting for bodies"}
+                    {tracked?.expressionMode === "camera" && (
+                      <>
+                        {" "}
+                        · {tracked.faceCount} face
+                        {tracked.faceCount === 1 ? "" : "s"}
+                      </>
+                    )}
                   </>
                 )}
               </p>

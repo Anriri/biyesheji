@@ -400,6 +400,7 @@ export class PortraitEngine {
         Math.sin(angle) * 0.65 +
         Math.sin(tt * 1.4) * 0.22 +
         s.hands * 1.65 +
+        s.expression * 0.85 +
         evolution * 0.45 +
         n * 0.16;
       fish.position.set(
@@ -409,7 +410,9 @@ export class PortraitEngine {
       );
       fish.rotation.z = Math.sin(tt * 0.9) * 0.13;
       const size =
-        (0.62 + n * 0.15) * (work.plan.object === "memento" ? 1.4 : 1);
+        (0.62 + n * 0.15) *
+        (work.plan.object === "memento" ? 1.4 : 1) *
+        (1 + s.expression * 0.18);
       fish.scale.set((Math.sin(tt) > 0 ? 1 : -1) * size, size, 1);
       (fish.material as THREE.MeshBasicMaterial).opacity =
         objects.opacity * reveal;
@@ -435,7 +438,7 @@ export class PortraitEngine {
         const u = j / 63;
         const wave =
           Math.sin(u * Math.PI * 2 + t * 0.3 + (1 - s.synchrony) * person) *
-          0.36;
+          (0.36 + s.expression * 0.25);
         array[j * 3] =
           Math.cos(angle) * separation * (1 - u * (0.15 + 0.85 * s.proximity)) +
           Math.sin(u * Math.PI) * (branch ? -0.6 : 0.6) +
@@ -464,7 +467,8 @@ export class PortraitEngine {
     this.futureGroup.visible = !!work.futurePlan;
     const water = this.groups.get("water")!;
     water.position.y += Math.sin(t * 0.35) * 0.035;
-    water.scale.x *= 1 + evolution * 0.18;
+    water.scale.x *= 1 + evolution * 0.18 + s.expression * 0.1;
+    water.scale.y *= 1 + s.expression * 0.08;
     this.camera.position.x = THREE.MathUtils.lerp(
       this.camera.position.x,
       Math.sin(t * 0.12) * 0.13,
@@ -479,7 +483,7 @@ export class PortraitEngine {
     this.renderer.setClearColor(
       new THREE.Color("#eaf0f6").lerp(
         new THREE.Color("#e8e0f2"),
-        s.expression * 0.25,
+        s.expression * 0.65,
       ),
     );
     this.renderer.render(this.scene, this.camera);

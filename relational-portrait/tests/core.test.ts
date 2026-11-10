@@ -9,6 +9,7 @@ import {
   matchBodies,
   motionSignals,
   poseSample,
+  facialActivity,
 } from "../src/services/tracking.ts";
 import {
   newWork,
@@ -17,6 +18,28 @@ import {
   appendFrame,
 } from "../src/work.ts";
 import { sampleSignals, sampleBodies } from "../src/engine.ts";
+test("facial movement maps blendshapes to visible intensity without emotion labels", () => {
+  const face = (scores: Record<string, number>) => ({
+    categories: Object.entries(scores).map(([categoryName, score]) => ({
+      categoryName,
+      score,
+    })),
+  });
+  assert.equal(facialActivity([]), 0);
+  assert.equal(facialActivity([face({ jawOpen: 0.03 })]), 0);
+  assert.equal(
+    facialActivity([face({ mouthSmileLeft: 0.9, mouthSmileRight: 0.9 })]),
+    1,
+  );
+  assert.ok(facialActivity([face({ jawOpen: 0.6 })]) > 0.7);
+  assert.ok(
+    facialActivity([face({ eyeBlinkLeft: 0.9, eyeBlinkRight: 0.9 })]) > 0.6,
+  );
+  assert.equal(
+    facialActivity([face({ jawOpen: 0.03 }), face({ jawOpen: 1 })]),
+    1,
+  );
+});
 test("memory and future extraction map the provided examples, remain editable, and accept non-English input", async () => {
   const w = newWork();
   const p = await localCreativeService.extract(w.participants, "memory");
