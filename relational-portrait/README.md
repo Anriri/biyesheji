@@ -1,6 +1,6 @@
 # RELATIONAL PORTRAIT — Interactive Prototype
 
-记忆 → 空间关系 → 未来想象。一个实际运行的 Three.js 2.5D 互动艺术实验，界面使用英文。独立放在 `relational-portrait/`，旧版《未名生物收容所》及其素材、下载包和入口均保留。
+记忆 → 空间关系 → 未来想象。一个实际运行的 Three.js 2.5D 互动艺术实验，界面使用英文。页面只保留作品、紧凑步骤栏与当前操作；标签和图层参数默认折叠。独立放在 `relational-portrait/`，旧版《未名生物收容所》及其素材、下载包和入口均保留。
 
 ![Interactive prototype preview](docs/preview.png)
 
@@ -35,13 +35,13 @@ npm run test:browser # Chromium / Playwright 功能测试
 
 ## 体验流程
 
-1. **Memory input**：默认两位参与者与题目示例。输入文字后点 **Find shared motifs**；标签可直接编辑、用 × 删除或自行添加。**Add participant** 可增加第三位及更多参与者。每人有独立文字、标签和稳定 ID，不是写死的 A/B 两份状态。
+1. **Memory input**：默认两位参与者与题目示例。输入文字后点 **Find motifs**；展开 **Motifs** 可编辑标签、用 × 删除或自行添加。**Add participant** 可增加第三位及更多参与者。每人有独立文字、标签和稳定 ID，不是写死的 A/B 两份状态。
 2. **Generate portrait**：建立独立透明素材与不同深度的 2.5D 场景。初次打开的动态画面标为 **Studio preview**，不冒充已生成的个人作品。生成后才启用后续步骤。
-3. **Initial portrait**：选择图层，调整 X/Y/Z、Size、Opacity、Visible。**Replace with transparent PNG** 逐层替换，保留该层的空间与互动逻辑；可恢复默认素材。PNG 限 4 MB、4096 × 4096。视差由展示区域内的指针轻微改变观察方向。
+3. **Portrait**：展开 **Edit layers** 后选择图层，调整 X/Y/Z、Size、Opacity、Visible。**Replace with transparent PNG** 逐层替换，保留该层的空间与互动逻辑；可恢复默认素材。PNG 限 4 MB、4096 × 4096。视差由展示区域内的指针轻微改变观察方向。
 4. **Live interaction**：默认 **Manual**，无需摄像头即可完整体验。Distance 越小，鱼群和轨迹越聚合；越大，空间与轨迹向两边分离。Synchrony 越高，鱼群与线条节奏越协调；Raised hands 改变鱼的高度。Expression 是明确标注的手动数值接口，不是心理或情绪识别。
 5. **Use camera**：允许摄像头，让两人的上半身与手腕完整进入镜头。身体中心来自肩/髋，抬手来自腕相对肩的位置。识别结果在本机映射到同样的实时参数，不重新调用素材生成。状态显示人数与推理帧率。**Manual / Stop camera** 会释放摄像头。默认隐藏摄像头预览；勾选后只在控制面板出现，绝不进入作品或导出图片。
 6. **Future input**：输入未来、提取并编辑标签，点 **Grow this world**。约 12 个场景秒中，池塘扩展、新海洋与建筑片段渐入，鱼与轨迹向新空间移动；初始校园与水体不会被替换。第一版每个肖像支持一个未来章节，生成新的初始肖像可开始另一轮实验。
-7. **Final portrait**：导出 **1600 × 900 PNG**、完整 **Portrait JSON**、单独的 **Text & motifs** 文本。**Replay the full journey** 重现初始显现、记录的互动参数及未来过渡，时间轴可暂停定位，再播放或回到 Live。**Open portrait** 恢复 JSON（含自定义 PNG、文字、标签、图层、参数时间线）。没有自动向服务器保存，重要作品请导出 JSON。
+7. **Final portrait**：导出 **1600 × 900 PNG**、完整 **Portrait JSON**、单独的 **Text & motifs** 文本。**Replay** 重现初始显现、记录的互动参数及未来过渡，时间轴可暂停定位，再播放或回到 Live。**Open** 恢复 JSON（含自定义 PNG、文字、标签、图层、参数时间线）。没有自动向服务器保存，重要作品请导出 JSON。
 
 最终艺术区域及 PNG 没有人物、人脸、人物剪影或相机视频。人物只作为输入。
 

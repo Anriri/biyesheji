@@ -29,6 +29,7 @@ test("complete journey: editable memory motifs, manual interaction, additive fut
       errors.push(m.text());
   });
   await page.getByRole("button", { name: "Find shared motifs" }).click();
+  await page.locator(".tags-fold summary").first().click();
   await page
     .getByRole("textbox", { name: "Edit motif 1", exact: true })
     .first()
@@ -108,13 +109,11 @@ test("complete journey: editable memory motifs, manual interaction, additive fut
   const restored = await save(page);
   expect(restored.data.plan.tags).toEqual(data.plan.tags);
   expect(restored.data.futurePlan.tags).toEqual(data.futurePlan.tags);
-  await page
-    .getByLabel("Open portrait JSON")
-    .setInputFiles({
-      name: "bad.json",
-      mimeType: "application/json",
-      buffer: Buffer.from("{broken"),
-    });
+  await page.getByLabel("Open portrait JSON").setInputFiles({
+    name: "bad.json",
+    mimeType: "application/json",
+    buffer: Buffer.from("{broken"),
+  });
   await expect(page.locator(".notice")).toContainText("unchanged");
   expect(errors).toEqual([]);
 });
@@ -127,6 +126,7 @@ test("participant arrays are not limited to two; independent PNG layers preserve
     .fill("We remember the garden and the rain.");
   await page.getByRole("button", { name: "Find shared motifs" }).click();
   await generated(page);
+  await page.locator(".layer-tools summary").click();
   const depth = page.getByRole("slider", { name: "Layer depth", exact: true });
   await depth.focus();
   await page.keyboard.press("End");
@@ -138,13 +138,11 @@ test("participant arrays are not limited to two; independent PNG layers preserve
     c.getContext("2d")!.fillRect(5, 5, 10, 10);
     return c.toDataURL("image/png").split(",")[1];
   });
-  await page
-    .getByLabel("Upload Campus fragments PNG")
-    .setInputFiles({
-      name: "fragment.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(data, "base64"),
-    });
+  await page.getByLabel("Upload Campus fragments PNG").setInputFiles({
+    name: "fragment.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(data, "base64"),
+  });
   await expect(page.locator(".notice")).toContainText("replaced");
   await page.getByRole("button", { name: "Enter live interaction" }).click();
   await page.getByRole("button", { name: "Imagine what comes next" }).click();
@@ -208,7 +206,13 @@ test("local CPU pose model really initializes and runs on a camera stream; stopp
   page,
 }) => {
   const external: string[] = [];
-  page.on("request", req => { if (req.url().startsWith("http") && !req.url().startsWith("http://localhost:5174/")) external.push(req.url()); });
+  page.on("request", (req) => {
+    if (
+      req.url().startsWith("http") &&
+      !req.url().startsWith("http://localhost:5174/")
+    )
+      external.push(req.url());
+  });
   await generated(page);
   await page.getByRole("button", { name: "Enter live interaction" }).click();
   await page.getByRole("button", { name: "Use camera", exact: true }).click();
@@ -285,21 +289,29 @@ test("small screens retain a 16:9 WebGL artwork without horizontal overflow", as
   });
 });
 
-test('cancelling camera setup cannot reopen a late stream or switch manual mode back', async ({page}) => {
+test("cancelling camera setup cannot reopen a late stream or switch manual mode back", async ({
+  page,
+}) => {
   await generated(page);
-  await page.getByRole('button', {name:'Enter live interaction'}).click();
+  await page.getByRole("button", { name: "Enter live interaction" }).click();
   await page.evaluate(() => {
-    const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getUserMedia = async constraints => {
-      await new Promise(resolve => setTimeout(resolve, 300));
+    const original = navigator.mediaDevices.getUserMedia.bind(
+      navigator.mediaDevices,
+    );
+    navigator.mediaDevices.getUserMedia = async (constraints) => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
       const stream = await original(constraints);
       (window as any).lateCameraTrack = stream.getVideoTracks()[0];
       return stream;
     };
   });
-  await page.getByRole('button', {name:'Use camera',exact:true}).click();
-  await page.getByRole('button', {name:'Manual',exact:true}).click();
-  await expect.poll(() => page.evaluate(() => (window as any).lateCameraTrack?.readyState)).toBe('ended');
-  await expect(page.locator('.mode-badge')).toContainText('MANUAL');
-  await expect(page.locator('.camera-status')).toContainText('Camera is off');
+  await page.getByRole("button", { name: "Use camera", exact: true }).click();
+  await page.getByRole("button", { name: "Manual", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).lateCameraTrack?.readyState),
+    )
+    .toBe("ended");
+  await expect(page.locator(".mode-badge")).toContainText("MANUAL");
+  await expect(page.locator(".camera-status")).toContainText("Camera is off");
 });

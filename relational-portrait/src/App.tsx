@@ -13,7 +13,6 @@ import { localCreativeService } from "./services/creative";
 import { PoseController, ManualExpression } from "./services/tracking";
 import type { TrackingUpdate } from "./services/tracking";
 import { PortraitEngine, sampleSignals } from "./engine";
-import { createAssets } from "./assets";
 const steps: Phase[] = ["memory", "portrait", "interaction", "future", "final"];
 const stepNames = [
   "Memory input",
@@ -23,12 +22,13 @@ const stepNames = [
   "Final portrait",
 ];
 const captions = [
-  "What stays between us?",
-  "A place made of fragments.",
-  "Let the space respond.",
-  "What comes after remembering?",
-  "A portrait, still becoming.",
+  "Your memory",
+  "Your portrait",
+  "Move together",
+  "Your future",
+  "Your portrait",
 ];
+const shortSteps = ["Memory", "Portrait", "Live", "Future", "Export"];
 function Arrow() {
   return (
     <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
@@ -37,19 +37,6 @@ function Arrow() {
         fill="none"
         stroke="currentColor"
         strokeWidth="1.2"
-      />
-    </svg>
-  );
-}
-function Flower() {
-  return (
-    <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true">
-      <path
-        d="M20 3v34M3 20h34M8 8l24 24M8 32 32 8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.3"
-        strokeLinecap="round"
       />
     </svg>
   );
@@ -76,7 +63,14 @@ function Range({
   return (
     <label className="range">
       <span>
-        {label}
+        {{
+          "Distance between participants": "Distance",
+          "Movement synchrony": "Synchrony",
+          "Expression input (manual)": "Expression · manual",
+          "Horizontal position": "X",
+          "Vertical position": "Y",
+          "Layer depth": "Depth",
+        }[label] || label}
         <output>
           {unit === "%" ? Math.round(value * 100) + "%" : value.toFixed(2)}
         </output>
@@ -507,7 +501,6 @@ export default function App() {
     }
   }
   const active = steps.indexOf(phase),
-    assets = createAssets(work.plan),
     layer = work.layers.find((l) => l.id === selectedLayer)!;
   const validMemory = work.participants.every(
       (p) => p.memory.trim() && p.memoryTags.some((t) => t.trim()),
@@ -561,15 +554,18 @@ export default function App() {
                 })
               }
             />
-            <Tags
-              disabled={which === "future" && !!work.futurePlan}
-              tags={p[which === "memory" ? "memoryTags" : "futureTags"]}
-              onChange={(tags) =>
-                updatePerson(p.id, {
-                  [which === "memory" ? "memoryTags" : "futureTags"]: tags,
-                })
-              }
-            />
+            <details className="fold tags-fold">
+              <summary>Motifs</summary>
+              <Tags
+                disabled={which === "future" && !!work.futurePlan}
+                tags={p[which === "memory" ? "memoryTags" : "futureTags"]}
+                onChange={(tags) =>
+                  updatePerson(p.id, {
+                    [which === "memory" ? "memoryTags" : "futureTags"]: tags,
+                  })
+                }
+              />
+            </details>
           </section>
         ))}
         {which === "memory" && (
@@ -601,24 +597,13 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="masthead">
-        <a className="brand" href="#" onClick={(e) => e.preventDefault()}>
-          <span className="brand-symbol">
-            <Flower />
-          </span>
-          <span>
-            RELATIONAL
-            <br />
-            PORTRAIT
-          </span>
-        </a>
-        <div className="project-label">
-          INTERACTIVE STUDY <span>№ 001 / 2026</span>
-        </div>
+        <span className="brand">RELATIONAL PORTRAIT</span>
         <button
+          aria-label="Open portrait"
           className="outline-button"
           onClick={() => file.current?.click()}
         >
-          Open portrait{" "}
+          Open{" "}
           <span>
             <Arrow />
           </span>
@@ -635,50 +620,23 @@ export default function App() {
           }}
         />
       </header>
-      <div className="intro">
-        <div>
-          <div className="eyebrow">AN EXPERIMENT IN SHARED MEMORY</div>
-          <h1>
-            A world held
-            <br />
-            <em>in common.</em>
-            <span className="title-star">✧</span>
-          </h1>
-        </div>
-        <p>
-          Two memories. One changing landscape.
-          <br />A portrait of the space between you.
-        </p>
-        <div className="edition">
-          <span>MEMORY → RELATION → POSSIBILITY</span>
-          <i>01—05</i>
-        </div>
-      </div>
       <nav className="steps" aria-label="Portrait stages">
         {steps.map((step, i) => (
           <button
             key={step}
+            aria-label={`${String(i + 1).padStart(2, "0")} ${stepNames[i]}`}
             aria-current={phase === step ? "step" : undefined}
             disabled={(i > 0 && !generated) || (i === 4 && !work.futurePlan)}
             onClick={() => setPhase(step)}
           >
             <b>{String(i + 1).padStart(2, "0")}</b>
-            <span>{stepNames[i]}</span>
-            {i < 4 && (
-              <i>
-                <Arrow />
-              </i>
-            )}
+            <span>{shortSteps[i]}</span>
           </button>
         ))}
       </nav>
       <main className="workspace">
         <section className="art-column">
           <div className="art-topline">
-            <span>
-              PORTRAIT NO. 001 <i>/</i>{" "}
-              {generated ? work.title.toUpperCase() : "A PLACE NOT YET NAMED"}
-            </span>
             <span className="mode-badge">
               <i />
               {replay
@@ -686,8 +644,8 @@ export default function App() {
                 : !generated
                   ? "STUDIO PREVIEW"
                   : inputSource === "camera"
-                    ? "CAMERA INPUT"
-                    : "MANUAL INPUT"}
+                    ? "CAMERA"
+                    : "MANUAL"}
             </span>
           </div>
           <div
@@ -711,18 +669,8 @@ export default function App() {
                 {fatal}
               </div>
             )}
-            <div className="corner-mark tl">+</div>
-            <div className="corner-mark br">+</div>
           </div>
           <div className="art-caption">
-            <span>
-              <b>{generated ? work.title : "The first fragment is a place."}</b>
-              <small>
-                {generated
-                  ? `${work.participants.length} voices · ${work.plan.tags.slice(0, 3).join(" / ")}`
-                  : "A live material preview. Begin with your shared memory."}
-              </small>
-            </span>
             <button
               className="circle-button"
               aria-label={playing ? "Pause animation" : "Resume animation"}
@@ -735,28 +683,6 @@ export default function App() {
               )}
             </button>
             <span className="timestamp">{formatTime(clock.time)}</span>
-          </div>
-          <div className="layer-ribbon">
-            {work.layers.map((l, i) => (
-              <button
-                key={l.id}
-                className={!l.visible ? "muted" : ""}
-                onClick={() => {
-                  setSelectedLayer(l.id);
-                  if (generated) setPhase("portrait");
-                }}
-              >
-                <span className="layer-thumb">
-                  <img src={l.custom || assets[l.id]} alt="" />
-                </span>
-                <span>
-                  <small>
-                    0{i + 1} / Z {l.z.toFixed(1)}
-                  </small>
-                  {l.name}
-                </span>
-              </button>
-            ))}
           </div>
           {replay && (
             <div className="replay-bar">
@@ -783,36 +709,20 @@ export default function App() {
               </button>
             </div>
           )}
-          <div className="art-footnote">
-            <span>01 / EACH FRAGMENT HAS ITS OWN DEPTH.</span>
-            <span>2.5D · REAL-TIME COMPOSITION</span>
-          </div>
         </section>
         <aside className="control-panel">
-          <div className="panel-heading">
-            <span className="eyebrow">
-              {String(active + 1).padStart(2, "0")} /{" "}
-              {stepNames[active].toUpperCase()}
-            </span>
-            <span className="small-star">
-              <Flower />
-            </span>
-          </div>
           <h2>{captions[active]}</h2>
           {phase === "memory" && (
             <>
-              <p className="panel-copy">
-                Write the same memory from different sides. Find a few motifs,
-                then make them yours.
-              </p>
               {peopleInputs("memory")}
               <div className="panel-actions">
                 <button
+                  aria-label="Find shared motifs"
                   className="secondary-button"
                   disabled={busy}
                   onClick={() => void findMotifs("memory")}
                 >
-                  Find shared motifs <span>✧</span>
+                  Find motifs <span>✧</span>
                 </button>
                 <button
                   className="primary-button"
@@ -825,138 +735,124 @@ export default function App() {
                   </span>
                 </button>
               </div>
-              <p className="micro-note">
-                LOCAL INTERPRETATION · EDITABLE MOTIFS
-                <br />
-                Your words stay in this browser until you export them.
-              </p>
             </>
           )}
           {phase === "portrait" && (
             <>
-              <p className="panel-copy">
-                A campus suspended over remembered water. Every fragment can
-                move independently.
-              </p>
-              <div className="layer-tabs">
-                {work.layers.map((l) => (
-                  <button
-                    key={l.id}
-                    aria-pressed={selectedLayer === l.id}
-                    onClick={() => setSelectedLayer(l.id)}
-                  >
-                    {l.name.split(" ")[0]}
-                  </button>
-                ))}
-              </div>
-              <div className="layer-editor">
-                <div className="layer-editor-title">
-                  <strong>{layer.name}</strong>
-                  <label>
+              <details className="fold layer-tools">
+                <summary>Edit layers</summary>
+                <div className="layer-tabs">
+                  {work.layers.map((l) => (
+                    <button
+                      key={l.id}
+                      aria-pressed={selectedLayer === l.id}
+                      onClick={() => setSelectedLayer(l.id)}
+                    >
+                      {l.name.split(" ")[0]}
+                    </button>
+                  ))}
+                </div>
+                <div className="layer-editor">
+                  <div className="layer-editor-title">
+                    <strong>{layer.name}</strong>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={layer.visible}
+                        onChange={(e) =>
+                          setWork((w) => ({
+                            ...w,
+                            layers: patchLayer(w.layers, layer.id, {
+                              visible: e.target.checked,
+                            }),
+                          }))
+                        }
+                      />{" "}
+                      Visible
+                    </label>
+                  </div>
+                  {(["x", "y", "z", "scale", "opacity"] as const).map((key) => (
+                    <Range
+                      key={key}
+                      label={
+                        {
+                          x: "Horizontal position",
+                          y: "Vertical position",
+                          z: "Layer depth",
+                          scale: "Size",
+                          opacity: "Opacity",
+                        }[key]
+                      }
+                      value={layer[key]}
+                      min={
+                        key === "scale"
+                          ? 0.25
+                          : key === "opacity"
+                            ? 0
+                            : key === "y"
+                              ? -4
+                              : -5
+                      }
+                      max={
+                        key === "scale"
+                          ? 2
+                          : key === "opacity"
+                            ? 1
+                            : key === "y"
+                              ? 4
+                              : 5
+                      }
+                      onChange={(v) =>
+                        setWork((w) => ({
+                          ...w,
+                          layers: patchLayer(w.layers, layer.id, { [key]: v }),
+                        }))
+                      }
+                    />
+                  ))}
+                  <label className="upload-button">
+                    ↑ Replace with transparent PNG
                     <input
-                      type="checkbox"
-                      checked={layer.visible}
-                      onChange={(e) =>
+                      type="file"
+                      accept="image/png"
+                      aria-label={`Upload ${layer.name} PNG`}
+                      onChange={(e) => {
+                        void upload(layer, e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {layer.custom && (
+                    <button
+                      className="text-button"
+                      onClick={() =>
                         setWork((w) => ({
                           ...w,
                           layers: patchLayer(w.layers, layer.id, {
-                            visible: e.target.checked,
+                            custom: undefined,
                           }),
                         }))
                       }
-                    />{" "}
-                    Visible
-                  </label>
+                    >
+                      Restore original fragment
+                    </button>
+                  )}
                 </div>
-                {(["x", "y", "z", "scale", "opacity"] as const).map((key) => (
-                  <Range
-                    key={key}
-                    label={
-                      {
-                        x: "Horizontal position",
-                        y: "Vertical position",
-                        z: "Layer depth",
-                        scale: "Size",
-                        opacity: "Opacity",
-                      }[key]
-                    }
-                    value={layer[key]}
-                    min={
-                      key === "scale"
-                        ? 0.25
-                        : key === "opacity"
-                          ? 0
-                          : key === "y"
-                            ? -4
-                            : -5
-                    }
-                    max={
-                      key === "scale"
-                        ? 2
-                        : key === "opacity"
-                          ? 1
-                          : key === "y"
-                            ? 4
-                            : 5
-                    }
-                    onChange={(v) =>
-                      setWork((w) => ({
-                        ...w,
-                        layers: patchLayer(w.layers, layer.id, { [key]: v }),
-                      }))
-                    }
-                  />
-                ))}
-                <label className="upload-button">
-                  ↑ Replace with transparent PNG
-                  <input
-                    type="file"
-                    accept="image/png"
-                    aria-label={`Upload ${layer.name} PNG`}
-                    onChange={(e) => {
-                      void upload(layer, e.target.files?.[0]);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-                {layer.custom && (
-                  <button
-                    className="text-button"
-                    onClick={() =>
-                      setWork((w) => ({
-                        ...w,
-                        layers: patchLayer(w.layers, layer.id, {
-                          custom: undefined,
-                        }),
-                      }))
-                    }
-                  >
-                    Restore original fragment
-                  </button>
-                )}
-              </div>
+              </details>
               <button
+                aria-label="Enter live interaction"
                 className="primary-button"
                 onClick={() => setPhase("interaction")}
               >
-                Enter live interaction{" "}
+                Continue{" "}
                 <span>
                   <Arrow />
                 </span>
               </button>
-              <p className="micro-note">
-                FIVE SEPARATE LAYERS · TRANSPARENT TEXTURES
-                <br />
-                No image is regenerated when you move.
-              </p>
             </>
           )}
           {phase === "interaction" && (
             <>
-              <p className="panel-copy">
-                Change the distance between you. The world finds a different way
-                to connect.
-              </p>
               <div className="source-switch">
                 <button
                   aria-pressed={inputSource === "manual"}
@@ -971,27 +867,6 @@ export default function App() {
                 >
                   {cameraBusy ? "Loading…" : "Use camera"}
                 </button>
-              </div>
-              <div className="signal-map">
-                <div
-                  className="signal-line"
-                  style={{ width: `${24 + (1 - signals.proximity) * 60}%` }}
-                />
-                {work.participants.map((p, i) => (
-                  <span
-                    key={p.id}
-                    style={{
-                      left: `${work.participants.length === 1 ? 50 : 50 + (i / (work.participants.length - 1) - 0.5) * (22 + (1 - signals.proximity) * 62)}%`,
-                    }}
-                  >
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                ))}
-                <small>
-                  {inputSource === "camera"
-                    ? `${tracked?.count || 0} / 2 BODY INPUTS`
-                    : "SIMULATED POSITIONS"}
-                </small>
               </div>
               <Range
                 label="Distance between participants"
@@ -1049,18 +924,14 @@ export default function App() {
                   checked={preview}
                   onChange={(e) => setPreview(e.target.checked)}
                 />{" "}
-                Show camera preview outside artwork
+                Camera preview
               </label>
-              <p className="micro-note">
-                MOVEMENT FEATURES ONLY · NO EMOTION INFERENCE
-                <br />
-                Pose tracks up to two people. Manual mode supports all voices.
-              </p>
               <button
+                aria-label="Imagine what comes next"
                 className="primary-button"
                 onClick={() => setPhase("future")}
               >
-                Imagine what comes next{" "}
+                Next{" "}
                 <span>
                   <Arrow />
                 </span>
@@ -1069,22 +940,14 @@ export default function App() {
           )}
           {phase === "future" && (
             <>
-              <p className="future-question">
-                WHAT DO YOU IMAGINE
-                <br />
-                FOR YOUR FUTURE?
-              </p>
-              <p className="panel-copy">
-                Keep what was. Add what could be. New fragments grow into the
-                original portrait.
-              </p>
               {peopleInputs("future")}
               <button
+                aria-label="Find future motifs"
                 className="secondary-button"
                 disabled={busy || replay || !!work.futurePlan}
                 onClick={() => void findMotifs("future")}
               >
-                Find future motifs <span>✧</span>
+                Find motifs <span>✧</span>
               </button>
               <button
                 className="primary-button"
@@ -1106,11 +969,12 @@ export default function App() {
                     <progress max="1" value={clock.evolution} />
                   </div>
                   <button
+                    aria-label="View final portrait"
                     className="secondary-button"
                     disabled={clock.evolution < 0.98}
                     onClick={() => setPhase("final")}
                   >
-                    View final portrait <Arrow />
+                    View portrait <Arrow />
                   </button>
                 </>
               )}
@@ -1118,34 +982,20 @@ export default function App() {
           )}
           {phase === "final" && (
             <>
-              <p className="panel-copy">
-                The old world is still here. A little more open, a little
-                further from where it began.
-              </p>
-              <div className="final-card">
-                <span>YOUR RELATIONAL PORTRAIT</span>
-                <h3>{work.title}</h3>
-                <p>{work.participants.map((p) => p.name).join(" + ")}</p>
-                <div className="summary-tags">
-                  {[
-                    ...new Set([
-                      ...work.plan.tags,
-                      ...(work.futurePlan?.tags || []),
-                    ]),
-                  ].map((t) => (
-                    <span key={t}>{t}</span>
-                  ))}
-                </div>
-              </div>
               <button
+                aria-label="Export final PNG"
                 className="primary-button"
                 disabled={!!fatal || clock.evolution < 0.98}
                 onClick={() => void exportPNG()}
               >
-                Export final PNG <span>↓</span>
+                Save PNG <span>↓</span>
               </button>
-              <button className="secondary-button" onClick={replayJourney}>
-                Replay the full journey <span>↺</span>
+              <button
+                aria-label="Replay the full journey"
+                className="secondary-button"
+                onClick={replayJourney}
+              >
+                Replay <span>↺</span>
               </button>
               <div className="export-row">
                 <button
@@ -1162,11 +1012,6 @@ export default function App() {
                 </button>
                 <button onClick={exportText}>↓ Text & motifs</button>
               </div>
-              <p className="micro-note">
-                PNG 1600 × 900 · ARTWORK ONLY
-                <br />
-                JSON preserves your inputs, layers and motion timeline.
-              </p>
             </>
           )}
           <div
@@ -1180,25 +1025,12 @@ export default function App() {
               autoPlay
               aria-label="Camera input preview"
             />
-            <span>INPUT ONLY · NEVER INCLUDED IN EXPORT</span>
           </div>
         </aside>
       </main>
       <div className="notice" role="status">
-        {notice || "A local experiment. An open-ended portrait."}
+        {notice}
       </div>
-      <footer>
-        <span>
-          RELATIONAL PORTRAIT <i>© 2026</i>
-        </span>
-        <span>
-          A MEMORY IS NEVER A STILL IMAGE.{" "}
-          <b>
-            <Arrow />
-          </b>
-        </span>
-        <span>EXPERIMENT / 01</span>
-      </footer>
     </div>
   );
 }
