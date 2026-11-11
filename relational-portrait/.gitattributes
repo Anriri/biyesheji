@@ -1,3 +1,7 @@
 public/models/*.task binary
 docs/*.png binary
 desktop/*.bat text eol=crlf
+
+public-portrait/unfinished/*.png binary
+server/prompts/*.txt text eol=lf
+docs/unfinished/brief.md text eol=lf

@@ -1,0 +1,38 @@
+Create one vertical 4:5 portrait for THE UNFINISHED PORTRAIT. Imagine the participant ten years from now in an impossible personal world. Art-direct it as a bold, dreamlike avant-garde fashion editorial. Combine the spatial freedom of an illustrated fairy tale, the tactile presence of a constructed set, and a touch of the grotesque. The central visual metaphor should organize the whole frame. Use the identity reference to preserve recognizable facial structure, feature proportions, and distinctive details. Suggest ten years of change through age, expression, and bearing.
+
+PARTICIPANT AND CONFIRMED VISUAL DIRECTION
+
+- Confirmed present self: {{confirmed_self}}
+- What the participant wants to keep: {{keep}}
+- What they want to change: {{change}}
+- Specific ten-year wish: {{future_wish}}
+- Priorities, 12 points total: career and creativity {{career_creativity}} / relationships and companionship {{relationships_companionship}} / exploration and freedom {{exploration_freedom}} / rest and enjoyment {{rest_enjoyment}}
+- Confirmed metaphor and its source: {{confirmed_metaphor}}
+- Confirmed style preferences and visual direction: {{visual_direction}}
+- Mode and revision details, when applicable: {{mode_and_revision}}
+
+1. PERSONAL DETAIL → PERSONAL MEANING
+
+Begin with a concrete phrase, habit, object, gesture, or sensation the participant actually mentioned. Identify what they want to carry into their future and what they are willing to change or make room for. Give specific personal details more weight than personality labels. Let the point allocation guide the relative emphasis of the future choices. Use the participant’s confirmed metaphor and style direction as anchors. Leave unspecified details open and avoid inventing personal history.
+
+2. PERSONAL MEANING → AN IMPOSSIBLE OBJECT
+
+Identify two qualities in the participant’s story that coexist, pull against each other, or change meaning when brought together. Give each a physical property, such as weight, expansion, elasticity, porosity, pressure, or balance. Invent one tangible object in which those properties meet in a physically impossible way.
+
+Start from the participant’s private associations. Treat familiar tools, places, and belongings as raw material for invention. Push past the first literal association with their profession or wish. Fuse forms from unrelated domains, give an intimate material an architectural scale, or make a rigid surface behave like a force. Choose the operation that best expresses this person’s experience.
+
+Give the object a precise silhouette, convincing surfaces, and a clear physical presence. Its identity can remain ambiguous. Make the viewer able to see what it does and feel the tension it holds, with room to interpret what it means.
+
+3. IMPOSSIBLE OBJECT → IMPOSSIBLE COMPOSITION
+
+Let the metaphor determine how the entire image is built. Break one fundamental spatial rule at the scale of the frame. Reconfigure the horizon, the direction of gravity, the boundary between inside and outside, or the scale relationship between the body and its surroundings. Make the impossibility visible in the composition itself, even at thumbnail size.
+
+Show one decisive visual relationship, such as a point of balance, a stretched boundary, or two spaces occupying the same volume. Let the rest unfold through material, shadow, overlap, and distance. Show the world already living with this impossibility. Give the foreground and background distinct consequences of the same rule.
+
+Carry the metaphor into fashion through a different physical form. Let it reshape the garment’s silhouette, weight, or negative space. Give the participant a familiar gesture within the unfamiliar world, and preserve their recognizable identity.
+
+4. ART DIRECTION AND OUTPUT
+
+Use clean, legible silhouettes, convincing material transitions, and controlled editorial lighting. Keep the concept bold and abstract enough to invite interpretation. Make the fashion silhouette and spatial transformation readable at a glance. Give secondary elements a clear relationship to the confirmed metaphor. Produce a single finished image with no visible text, logos, frames, or watermarks.
+
+For a revision, use the supplied first portrait as the editing base. Preserve facial identity, framing, camera angle, placement of the figure, and the original metaphor. Make only the localized changes specified in the revision details. Treat this as a second possible future for the same person within the same visual world.

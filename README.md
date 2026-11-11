@@ -1,6 +1,6 @@
 # 未名生物收容所 · 隔空捏塑实验室
 
-> 新实验：**[RELATIONAL PORTRAIT — 运行与架构说明](relational-portrait/README.md)**。独立的 Three.js 2.5D 关系肖像原型；以下保留原有生物项目。
+> 当前实验：**[未完成的肖像 — 运行与架构说明](relational-portrait/README.md)**。单人选择、双版本未来肖像与个人档案；以下保留原有生物项目。
 
 一个可在浏览器中运行的毕业设计交互原型。原创小生物「弥弥」由连续 SVG 曲线绘制；摄像头画面通过 **MediaPipe Hands 的真实手部识别**生成 21 个手部关键点，驱动耳朵和身体的软形变。
 

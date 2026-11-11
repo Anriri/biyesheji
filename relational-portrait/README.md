@@ -1,12 +1,14 @@
-# RELATIONAL PORTRAIT — Interactive Prototype
+# 未完成的肖像 · THE UNFINISHED PORTRAIT
 
-记忆 → 空间关系 → 未来想象。一个实际运行的 Three.js 2.5D 互动艺术实验，界面使用英文。页面只保留作品、紧凑步骤栏与当前操作；标签和 PNG 上传默认折叠。独立放在 `relational-portrait/`，旧版《未名生物收容所》及其素材、下载包和入口均保留。
+现在 → 12 点选择 → 确认隐喻 → 两种未来 → 一项当下行动。
 
-![Interactive prototype preview](docs/preview.png)
+本轮沿用当前目录里的 **React + TypeScript + Vite**，新增 Node.js 服务端与 OpenAI 适配器，入口已切换为这个单人体验。没有迁移成 Next.js。旧关系肖像的源码仍在仓库，完整旧版可查看 Git 提交 `9c0cad1`；旧运行包没有覆盖。
 
-## 运行
+![封面](docs/unfinished/cover.png)
 
-开发环境：Node.js **22.12+**（本环境验证版本 24.19）与 npm。
+## 启动
+
+需要 Node.js **22.12+** 与 npm，本环境使用 Node 24。
 
 ```bash
 cd relational-portrait
@@ -14,81 +16,86 @@ npm ci
 npm run dev
 ```
 
-在运行服务的电脑上打开终端显示的地址，默认 `http://localhost:5174/`。开发服务监听 `0.0.0.0`；摄像头只在本机 localhost/127.0.0.1 或 HTTPS 下可用。远程访问需通过支持 HTTPS 的预览或部署，普通局域网 HTTP 不具备摄像头权限。
+在运行服务的电脑打开 `http://localhost:5174`。前端与 `/api` 同源，由一个 Node 服务提供。
 
 ```bash
-npm run build       # TypeScript 检查 + Vite 生产构建
-npm run preview     # 预览 dist，默认 4174
-npm test            # 逻辑测试
-npm run test:browser # Chromium / Playwright 功能测试
+npm run build   # 前端及服务端类型检查，构建前端
+npm start       # 提供 dist 和服务端 API，默认端口 5174
+npm test        # 数据、模板、SDK 请求、上传与服务端契约测试
+npm run test:browser # 桌面、手机及完整流程
 ```
 
-浏览器测试默认用 `/usr/bin/chromium`。其他系统先 `npx playwright install chromium`，或通过 `CHROMIUM_PATH` 指定浏览器，然后运行测试。应用本身不需要 Playwright。
+浏览器测试默认使用 `/usr/bin/chromium`。其他电脑可先运行 `npx playwright install chromium`，并用 `CHROMIUM_PATH` 指定可执行路径。测试不需要真实 API 密钥。
 
-### Windows 10 / 11 直接运行包
+### Windows 运行包
 
-仓库 `downloads/relational-portrait-windows-v1.zip`：全部解压后双击 `start-windows.bat`。保持启动窗口打开，页面在自己的电脑上运行，不上传记忆或摄像头画面。不需要安装 Node.js、Python、npm；Three.js、WASM、模型和占位素材都已包含。不要直接双击 `app/index.html`，JavaScript 模块与模型需要 HTTP 服务。
+仓库 `downloads/unfinished-portrait-windows.zip` 包含源码、构建产物与原创预制肖像。
 
-修改源码请进入包内 `source/`，执行 `npm ci` 和 `npm run dev`。
+- **无需安装开发环境体验示例**：全部解压，双击 `start-demo-windows.bat`，保持窗口打开，进入「体验示例」。这个启动器只提供静态示例，没有真实 AI 服务。
+- **运行真实模式**：先安装 Node.js 22.12+，双击 `start-ai-windows.bat`。首次会通过 npm 安装依赖。在包内配置 `.env` 后重新运行即可；也可按上面的命令启动。服务只在自己启动的电脑运行，真实生成需要联网访问 OpenAI。
 
-启动器复用了旧项目的 PowerShell TCP 本机静态服务器，只监听 127.0.0.1，并自动选择空闲端口。此版本在 Linux/Chromium 中验证网页及静态构建；未在 Windows 实机上运行启动器。
+Windows 启动器复用旧项目的本机静态服务器与标准 Node/npm 命令；网页和构建已在 Linux/Chromium 中验证，尚未在 Windows 实机上运行启动器。
 
-## 体验流程
+## 配置真实 AI
 
-1. **Memory input**：默认两位参与者与题目示例。输入文字后点 **Find motifs**；展开 **Motifs** 可编辑标签、用 × 删除或自行添加。界面本轮使用两位参与者，底层使用可扩展的参与者数组。
-2. **Generate portrait**：建立独立透明素材与不同深度的 2.5D 场景。初次打开的动态画面标为 **Studio preview**，不冒充已生成的个人作品。生成后才启用后续步骤。
-3. **Portrait**：可直接点 **Continue** 进入互动。需要自定义素材时，展开 **PNG assets**，选择图层并上传透明 PNG。仅替换该层素材，原有空间与互动逻辑保留；PNG 限 4 MB、4096 × 4096。轻微视差自动运行，不需要鼠标控制。
-4. **Live interaction**：默认 **Manual**。Distance 越小，鱼群和轨迹越聚合；越大，空间分离。Expression 在 Manual 下通过滑块模拟；在 Camera 下由 Face Landmarker 自动读取，滑块仅显示实时数值。
-5. **Use camera**：允许摄像头，让两人的上半身与手腕完整进入镜头。双肩中心控制对应鱼群与轨迹的位置，双人距离控制聚合和分离，同向运动控制同步节奏，手腕高于肩控制鱼群高度。一个人左右或上下移动时，对应鱼群和轨迹也会跟随；双人靠近/远离仍需要同时识别两人。坐姿时双肩清晰可见即可，不要求腰部入镜。微笑、张嘴、抬眉或眨眼会改变鱼群高度/大小、水体宽高与轨迹波动。脸部要清晰入镜；状态显示身体数、人脸数与推理帧率；**Manual / Stop camera** 释放摄像头。摄像头画面仅用于推理，不在网页或作品中显示。
-6. **Future input**：输入未来、提取并编辑标签，点 **Grow this world**。约 12 个场景秒中，池塘扩展、新海洋与建筑片段渐入，鱼与轨迹向新空间移动；初始校园与水体不会被替换。第一版每个肖像支持一个未来章节，生成新的初始肖像可开始另一轮实验。
-7. **Final portrait**：导出 **1600 × 900 PNG**、**Portrait JSON**、**Text & motifs** 文本。**Replay** 播放初始显现、记录的互动和未来生长，结束后继续实时展示。JSON 包含文字、标签、独立素材、身体位置与动作参数；本版只提供导出，不增加导入、时间轴拖动、播放暂停或图层参数编辑。作品不自动上传服务器。
+将 `.env.example` 复制成 `.env`，仅在本机文件里填写密钥：
 
-最终艺术区域及 PNG 没有人物、人脸、人物剪影或相机视频。人物只作为输入。
+```dotenv
+OPENAI_API_KEY=你的服务端密钥
+OPENAI_TEXT_MODEL=gpt-4.1-mini
+OPENAI_IMAGE_MODEL=gpt-image-2
+PORT=5174
+```
 
-## 摄像头与离线资源
+密钥只由 Node 读取，不使用 `VITE_` 前缀，不进入浏览器构建、个人档案或日志。真实模式没有配置时会明确提示并保留已填内容，不会自动换成示例图。配置后重启服务，再从首页「开始塑造」进入。
 
-- 使用固定版本 **MediaPipe Tasks Vision 0.10.21 / Pose + Face Landmarker**（避免新版 SDK 的使用统计请求），本版 `numPoses: 2`、`numFaces: 2`，同一摄像头输入，不另开视频流。记忆、作品数据、轨迹和手动编排支持参与者数组；摄像头本轮同时追踪最多两人。
-- 首次安装后 `postinstall` 从 npm 包复制匹配的 WASM 到 `public/vision/wasm/`。姿态与面部模型已放在 `public/models/`，不依赖 Google Storage/CDN 在线下载。模型加载前校验 SHA-256，各模型来源、校验记录与许可证在 `public/models/PROVENANCE.md`。
-- 权限拒绝、无设备、非安全上下文、模型缺失、校验失败或跟踪异常均显示具体状态并保留手动控制。停止后终止 MediaStream tracks，取消推理与待处理请求。
-- 相机未看到两个人时，不伪造距离或同步检测。只有一个身体时，显示需要第二人；静止两人不会被当作“同步移动”。
-- Face Landmarker 读取 mouthSmile、jawOpen、browInnerUp、eyeBlink 等 blendshape 系数，取可见人脸中较强的动作值并平滑映射，不输出任何心理或情绪标签。没看到脸时强度回到 0；Face 模型缺失或运行失败时，身体追踪继续，Expression 恢复手动。人脸图像与面部关键点不会进入 PNG 或 JSON。
-- 位置关联是近邻匹配与平滑，不是身份识别；交叉、遮挡和离开镜头后可能换槽。光线、衣着、遮挡、距离与 CPU 会影响识别。建议单台摄像头、固定机位、背景简洁，镜头内站两人并留出手腕空间。
+两个独立接口：
 
-## 架构
+- `POST /api/translate`：文本模型返回两个视觉隐喻，服务端验证结构、原话依据和四个选择变量。原始照片不会发给文本模型。
+- `POST /api/portrait`：首次无照片时调用图像生成；有本人照片时走带参考图的图像接口。第二次调用图像编辑，**第一幅肖像是首张编辑底图**，可再附原始照片作为身份参考。保持已确认的自我描述、风格和隐喻，按实际点数差异和愿望变化指定至多两个局部区域。
 
-| 文件 | 职责 |
-| --- | --- |
-| `src/App.tsx` | 五阶段界面、文字/标签编辑、距离与表情滑块、相机状态、素材上传、导出 |
-| `src/services/creative.ts` | 独立 `CreativeService` 接口；当前为本地英中关键词与语义素材计划，无真正 AI API |
-| `src/assets.ts` | 独立透明 SVG 占位素材；背景、建筑、水、鱼/物件与关系轨迹分别生成，支持替换 PNG |
-| `src/engine.ts` | PerspectiveCamera + 不同 Z 平面，水体顶点着色器、鱼群路径、浮动建筑、关系线、渐入与回放 |
-| `src/services/tracking.ts` | Pose / Face 初始化与释放、可见性检查、身体匹配、面部 blendshape 到强度映射、手动回退 |
-| `src/types.ts` | 可扩展参与者、图层、计划、信号帧与作品数据模型 |
-| `src/work.ts` | 作品数据、时间线记录、导出与数据校验工具 |
+已核对 OpenAI 官方 SDK 文档源码：
+[Images API 类型与说明](https://github.com/openai/openai-node/blob/master/src/resources/images.ts)。本项目使用其支持的 `1024x1536`、`image[]` 参考图与 PNG 输出；GPT Image 2 不传 `input_fidelity`。这与真实服务端 API 调用分开验证，详见文末实测范围。
 
-真实 AI 服务可以实现 `CreativeService`，替换本地关键词与素材计划；透明图像的实际提供/替换与 Three.js 实时参数解耦。现有输入与动作变化不触发 AI 图像生成请求。占位素材是程序绘制的独立 SVG，不是一张合成背景，且没有使用复杂 3D 模型、Bloom、体积光、Lens Flare 或大量粒子。
+## 提示词位置
 
-### 视觉映射
+- 上传的需求原文保存在 [docs/unfinished/brief.md](docs/unfinished/brief.md)。
+- **完整运行时英文模板**：[server/prompts/portrait-v1.txt](server/prompts/portrait-v1.txt)，版本标识 `portrait-v1`。其中第 2、3 节按原文保留。
+- 填充与调用：[server/ai.ts](server/ai.ts)。用户数据被视为有边界的素材，空字段被过滤，点数 0 会保留。填充后的完整模板实际作为 `prompt` 传入图像请求。
+- 第二幅的差异来自 [src/unfinished/domain.ts](src/unfinished/domain.ts) 的数据计算，服务端重新计算，不相信客户端传来的“修改说明”。不会为第二幅重新挑选隐喻。
 
-- 身体平移 → 对应的鱼群与轨迹实时跟随；一个人也可验证位置映射。
-- 身体靠近 → 两组轨迹终点与鱼群收拢；远离 → 轨迹形成分离的分支。
-- 同方向移动速度与方向一致 → 提高相位协调度；静止输入同步值为 0。
-- 腕高于肩 → 增加鱼群垂直空间。
-- Expression（相机自动 / 手动回退）→ 鱼群升高最多 0.85 场景单位、放大最多 18%，水体横向扩展最多 10%，轨迹波幅和色彩随之变化。
-- Future tags → 决定新增海洋/水域与建筑素材；Three.js 负责渐入、扩展、位置插值和现有元素迁移。
+模板要求把头部、面部和关键物体放在中央安全区。服务端将受支持的竖幅输出统一中心裁切为 **1024 × 1280 / 4:5**，不拉伸；示例图也已统一这个比例。真实模型的身份与构图连续性仍需人眼验收，不能由提示词保证每次完全相同。
 
-## 已验证与范围
+## 体验与数据
 
-执行 TypeScript/Vite 构建、逻辑单测与真实 Chromium 功能测试，覆盖标签、三个参与者、图层 PNG 替换、手动互动、未来增量生长、PNG 尺寸、文字/JSON 导出、回放、手机尺寸、相机拒绝与模型缺失、本地模型实际推理、坐姿双肩可见但腰部不入镜时保留识别结果、位置从相机回调映射到对应鱼群/轨迹，以及身体位置记录与回放。另以临时合成的双人测试画面通过相机输入路径，确认返回两个身体位置；另用临时平移人物测试视频，通过真实 MediaPipe → 应用回调 → Three.js 链路确认单人平移能带动对应鱼群，隔离背景动画后鱼群位移与姿态坐标变化一致。另通过临时人像测试视频验证真实 Face Landmarker 推理，确认 Expression 自动变化且摄像头模式不被手动值覆盖；面部模型缺失时身体追踪仍可用。测试画面没有打包或出现在艺术素材中。
+1. **SELF**：本人照片选填，上传前告知其在真实模式下发送给 OpenAI 用作人物参考。可预览、更换、移除；性格标签可跳过或补充。整理自我描述后可以手动改写并确认。MBTI 只是补充文字，不用于指定固定画风。
+2. **CHOICE**：从 0 开始分配 12 点；分完才能继续。四个方向彼此不排斥。再分配时先收回点数，明确展示从哪一项移出几点。
+3. **TRANSLATION**：确认两个候选中的一个，编辑风格，再生成第一幅。
+4. **PORTRAIT**：只开放一次第二版本调整。生成前展示精确点数差、愿望改动和计划局部区域；桌面并列，手机在同一位置切换，另外明确选择要带走的一幅。
+5. **REFLECTION**：写下一项当下行动。下载肖像和个人档案；档案可以从首页重新打开，也可读取主动保存到本机的档案。使用浏览器本地存储，空间不足会提示保留下载文件。
 
-当前未接真实生成式 AI；表情通过 Face Landmarker 读取面部动作，不做情绪分析；无 AR、声音、视频导出、账户、数据库或多人联网。回放保存的是身体位置和视觉参数时间线、初始显现和未来加入时间，按保存的最终图层设置重现；不记录每次打字、素材编辑的全部过程。不保证遮挡/交叉中的身份不变，也未在当前云环境使用物理双人摄像头实测，因此真实现场动作质量仍需在安装场地校准。
+档案绑定的是**所选版本自己的**自我描述、愿望、点数、设计解释和行动，而不是屏幕上最后编辑的表单。默认不含原始照片。只有点击保存时才写本机档案，没有自动上传档案或自动保存问答。
 
-## 重新打包
+上传在客户端与服务端分别校验格式、大小与实际图像内容；照片上限 4 MB、单边 4096 像素。服务端为图像阶段临时处理照片，没有照片数据库。SDK 日志关闭，应用日志不记录照片、完整问答或密钥。同一请求 ID 与相同内容会复用处理中/已完成的请求，避免重复提交；结果暂存在服务进程内存，最长 15 分钟、最多 12 条。
+
+### 示例的边界
+
+「体验示例」使用虚构资料与两张原创预制图，页面持续明确标注。第二张由第一张定向编辑，演示「事业 6 → 4、探索 1 → 3」时，同一纸质房间从保护性包裹变成向外展开的通路。示例允许修改输入以检查交互，**预制图不会因此重新生成**，不冒充为任意输入定制的作品。真实模式才会根据确认的自我描述与选择请求新的图像。
+
+## 已实测与未实测
+
+已实测：开发与生产构建、7 项数据/服务契约测试，以及 Playwright 完整示例、点数限制、返回保留输入、一次调整、双版本比较、4:5 下载、档案对应版本与重新打开、手机切换和真实模式失败重试。OpenAI 官方 SDK 的实际请求序列化另用本地测试传输层验证，检查完整模板、人物参考图、V1 编辑底图顺序与尺寸参数。
+
+**本环境没有配置 API 密钥，因此尚未向真实 OpenAI 服务跑通一次首次生成和一次图像编辑。** 测试传输层和预制示例不会被报告为真实 API 验证。配置后可按上述流程在真实模式验收。
+
+当前只实现单人、两幅静态肖像和档案；多人、动态短片、亚克力挂件与印刷没有加入。真人照片的十年变化、身份相似度和编辑连续性取决于模型，仍需要参与者确认。
+
+## 打包
 
 ```bash
 npm ci
 npm run build
-python3 scripts/package-windows.py
+python3 scripts/package-unfinished.py
 ```
 
-生成的运行包写到父仓库 `downloads/relational-portrait-windows-v1.zip`；该脚本只生成新包，不改旧项目。
+输出到父仓库 `downloads/unfinished-portrait-windows.zip`，与旧版 ZIP 分开。

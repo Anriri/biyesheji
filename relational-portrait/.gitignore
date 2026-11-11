@@ -4,3 +4,7 @@ public/vision/
 test-results/
 playwright-report/
 *.local
+
+.env
+.env.*
+!.env.example
